@@ -3,163 +3,202 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>单点导航（终极版）</title>
+<title>单点导航（B版·带总数）</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto;margin:0;padding:12px;background:#f5f5f5}
-h3{margin:6px 0 10px}
-textarea,input{width:100%;border-radius:10px;border:1px solid #ddd;padding:10px;font-size:14px;box-sizing:border-box}
-textarea{height:150px}
-button{border:0;border-radius:10px;padding:10px 14px;font-size:15px}
-.primary{background:#1a73e8;color:#fff}
-.ghost{background:#fff;border:1px solid #ddd}
-.card{background:#fff;border-radius:12px;padding:12px;margin-top:10px;display:flex;justify-content:space-between;gap:10px}
-.badge{background:#eee;border-radius:999px;padding:4px 8px;font-size:12px;font-weight:700;margin-right:6px}
-.addr{font-size:14px;line-height:1.3}
-.actions{display:flex;gap:8px;align-items:center}
-.delivered{opacity:.45}
-.tabs{display:flex;gap:10px;margin-top:10px}
-#map{height:60vh;border-radius:12px;margin-top:10px}
-.small{font-size:12px;color:#666;margin:6px 0}
+  body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto;background:#f5f6f8;margin:0;padding:14px;}
+  h3{margin:6px 0 10px;font-size:20px}
+  textarea{width:100%;height:150px;border-radius:14px;border:1px solid #ddd;padding:12px;font-size:14px;box-sizing:border-box;background:#fff;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+  button{border:0;border-radius:14px;padding:12px 16px;font-size:15px}
+  .primary{background:#1a73e8;color:#fff}
+  .ghost{background:#fff;border:1px solid #ddd}
+  .small{font-size:12px;color:#666;margin:8px 0 0}
+  #stats{margin-top:10px;font-size:14px;color:#111;font-weight:800;background:#fff;border:1px solid #e6e6e6;border-radius:14px;padding:10px 12px;display:inline-block;}
+  #map{height:62vh;border-radius:16px;margin-top:12px;box-shadow:0 2px 10px rgba(0,0,0,.10);overflow:hidden;background:#fff;}
+  .pin{position:relative;width:34px;height:34px;background:#111;color:#fff;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;border:2px solid #fff;box-shadow:0 2px 7px rgba(0,0,0,.28);}
+  .pin.done{background:#9aa0a6}
+  .leaflet-popup-content-wrapper{border-radius:14px;}
+  .popupbox{display:flex;align-items:center;gap:10px;}
+  .badge{font-weight:900;background:#111;color:#fff;border-radius:10px;padding:4px 8px;font-size:12px;}
+  .badge.done{background:#9aa0a6}
+  .navbtn{background:#1a73e8;color:#fff;border-radius:10px;border:0;padding:8px 10px;font-weight:800;font-size:13px;}
+  .addrline{font-size:12px;color:#333;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 </style>
 </head>
 
 <body>
+<h3>单点导航（B版·带总数）</h3>
 
-<h3>单点导航（终极版）</h3>
-<div class="small">
-✅ 列表 / 地图模式 ｜ ▶️ 导航自动勾选 ｜ 📍 点地图直接导航
+<textarea id="input" placeholder="每行一单（路线号 + 空格 + 地址）
+例如：
+698 211 Beecham Dr #116, Crafton, PA
+697 4450 Steubenville Pike, Pittsburgh, PA"></textarea>
+
+<div class="row">
+  <button class="primary" onclick="buildMap()">生成地图点</button>
+  <button class="ghost" onclick="clearAll()">清空今天内容</button>
 </div>
 
-<textarea id="input" placeholder="每行一单：
-727 62 Taylor St, Pittsburgh, PA
-676 1128 Chestnut Ridge Dr, Pittsburgh, PA"></textarea>
+<div class="small">地图上点数字 → 出现小卡片 → 点“导航”直接 Google Maps（并自动✅保存）</div>
 
-<div class="tabs">
-  <button class="primary" onclick="build()">生成列表</button>
-  <button class="ghost" onclick="clearAll()">清空</button>
-</div>
+<div id="stats">今日总数：0　已送：0　剩余：0</div>
 
-<div class="tabs">
-  <button id="btnList" class="primary" onclick="setMode('list')">列表模式</button>
-  <button id="btnMap" class="ghost" onclick="setMode('map')">地图模式</button>
-</div>
+<div id="map"></div>
 
-<div id="list"></div>
-<div id="mapWrap" style="display:none">
-  <button class="primary" onclick="geocodeAll()">生成地图点</button>
-  <div id="map"></div>
-</div>
-
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const LS_DONE="done_auto_v1",LS_TEXT="text_auto_v1",LS_GEO="geo_auto_v1";
-let items=[],doneSet=new Set(),geoCache={};
-let map,layer;
+const LS_TEXT="b_text_v2";
+const LS_DONE="b_done_v2";
+const LS_GEO ="b_geo_v2";
 
-function normalizeLine(l){
- l=l.trim().replace(/\s+/g," ");
- let m=l.match(/^(\d{2,4})(.*)$/);
- if(m){
-  let rest=m[2].replace(/^[,\-:#\s]+/,"");
-  return {id:l,route:m[1],addr:rest||l};
- }
- return {id:l,route:"",addr:l};
-}
+let doneSet=new Set();
+let geoCache={};
+let items=[];
 
-function build(){
- const lines=document.getElementById("input").value.split(/\n+/).filter(Boolean);
- items=lines.map(normalizeLine);
- save();
- render();
-}
+let map, layer;
 
-function render(){
- const list=document.getElementById("list"); list.innerHTML="";
- items.forEach(it=>{
-  const div=document.createElement("div");
-  div.className="card"+(doneSet.has(it.id)?" delivered":"");
-  div.innerHTML=`
-   <div class="addr">
-    ${it.route?`<span class="badge">NO.${it.route}</span>`:""}
-    ${it.addr}
-   </div>
-   <div class="actions">
-    <input type="checkbox" ${doneSet.has(it.id)?"checked":""}
-     onchange="toggle('${it.id}')">
-    <button class="primary"
-     onclick="goNav('${it.id}','${it.addr.replace(/'/g,"\\'")}')">▶ 导航</button>
-   </div>`;
-  list.appendChild(div);
- });
-}
-
-function toggle(id){doneSet.has(id)?doneSet.delete(id):doneSet.add(id);save();render();}
-function goNav(id,addr){
- doneSet.add(id); save(); render();
- location.href="https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(addr);
-}
-
-function setMode(m){
- document.getElementById("list").style.display=m==="list"?"block":"none";
- document.getElementById("mapWrap").style.display=m==="map"?"block":"none";
- document.getElementById("btnList").className=m==="list"?"primary":"ghost";
- document.getElementById("btnMap").className=m==="map"?"primary":"ghost";
- if(m==="map"&&!map) initMap();
-}
-
-function initMap(){
- map=L.map("map").setView([40.44,-79.99],11);
- L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
- layer=L.layerGroup().addTo(map);
-}
-
-async function geocodeAll(){
- for(const it of items){
-  if(geoCache[it.addr]) continue;
-  const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&q="+encodeURIComponent(it.addr));
-  const j=await r.json();
-  if(j[0]) geoCache[it.addr]={lat:j[0].lat,lon:j[0].lon};
-  await new Promise(r=>setTimeout(r,1000));
- }
- drawMap(); save();
-}
-
-function drawMap(){
- layer.clearLayers();
- items.forEach(it=>{
-  const g=geoCache[it.addr];
-  if(!g) return;
-  const m=L.marker([g.lat,g.lon]).addTo(layer);
-  m.bindPopup(`
-   <b>NO.${it.route||""}</b><br>${it.addr}<br>
-   <button onclick="goNav('${it.id}','${it.addr.replace(/'/g,"\\'")}')"
-   style="margin-top:6px;background:#1a73e8;color:#fff;border:0;padding:6px 10px;border-radius:8px">
-   ▶ 导航</button>`);
- });
-}
-
-function clearAll(){
- if(!confirm("清空？"))return;
- items=[];doneSet.clear();geoCache={};
- localStorage.clear();
- render(); if(layer)layer.clearLayers();
+function load(){
+  try{
+    document.getElementById("input").value = localStorage.getItem(LS_TEXT) || "";
+    doneSet = new Set(JSON.parse(localStorage.getItem(LS_DONE) || "[]"));
+    geoCache = JSON.parse(localStorage.getItem(LS_GEO) || "{}");
+  }catch(e){}
 }
 
 function save(){
- localStorage.setItem(LS_TEXT,document.getElementById("input").value);
- localStorage.setItem(LS_DONE,JSON.stringify([...doneSet]));
- localStorage.setItem(LS_GEO,JSON.stringify(geoCache));
+  localStorage.setItem(LS_TEXT, document.getElementById("input").value || "");
+  localStorage.setItem(LS_DONE, JSON.stringify([...doneSet]));
+  localStorage.setItem(LS_GEO, JSON.stringify(geoCache));
 }
 
-(function init(){
- document.getElementById("input").value=localStorage.getItem(LS_TEXT)||"";
- doneSet=new Set(JSON.parse(localStorage.getItem(LS_DONE)||"[]"));
- geoCache=JSON.parse(localStorage.getItem(LS_GEO)||"{}");
- if(document.getElementById("input").value.trim()) build();
-})();
+function updateStats(){
+  const total = items.length;
+  const done = items.filter(it => doneSet.has(it.id)).length;
+  const left = total - done;
+  document.getElementById("stats").textContent = `今日总数：${total}　已送：${done}　剩余：${left}`;
+}
+
+function clearAll(){
+  document.getElementById("input").value="";
+  items=[];
+  doneSet.clear();
+  geoCache={};
+  save();
+  updateStats();
+  if(layer) layer.clearLayers();
+}
+
+function normalizeLine(line, idx){
+  line=(line||"").trim().replace(/\s+/g," ");
+  if(!line) return null;
+
+  if(line.includes(",")){
+    const i=line.indexOf(",");
+    const a=line.slice(0,i).trim();
+    const b=line.slice(i+1).trim();
+    if(/^\d{2,4}$/.test(a) && b) return {id:line, no:a, addr:b};
+  }
+  const m=line.match(/^(\d{2,4})(.*)$/);
+  if(m){
+    const no=m[1];
+    let rest=(m[2]||"").trim().replace(/^[,\-:#\s]+/,"").trim();
+    return {id:line, no, addr:rest||line};
+  }
+  return {id:line, no:String(idx+1), addr:line};
+}
+
+function initMap(){
+  map=L.map("map",{zoomControl:true}).setView([40.44,-79.99],11);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{
+    maxZoom:19, attribution:"© OpenStreetMap"
+  }).addTo(map);
+  layer=L.layerGroup().addTo(map);
+}
+
+async function geocode(addr){
+  if(geoCache[addr]) return geoCache[addr];
+  const url="https://nominatim.openstreetmap.org/search?format=json&q="+encodeURIComponent(addr);
+  const r=await fetch(url,{headers:{'Accept':'application/json'}});
+  const j=await r.json();
+  if(j && j[0]){
+    geoCache[addr]={lat:+j[0].lat, lon:+j[0].lon};
+    save();
+    return geoCache[addr];
+  }
+  return null;
+}
+
+function goNav(it){
+  doneSet.add(it.id);
+  save();
+  updateStats();
+  const url="https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(it.addr);
+  location.href=url;
+}
+
+function makePinHtml(it){
+  const isDone = doneSet.has(it.id);
+  const cls = isDone ? "pin done" : "pin";
+  return `<div class="${cls}">${it.no}</div>`;
+}
+
+function makePopupHtml(it){
+  const isDone = doneSet.has(it.id);
+  const badgeCls = isDone ? "badge done" : "badge";
+  const safeId = it.id.replace(/'/g,"\\'");
+  const safeAddr = (it.addr||"").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  return `
+    <div class="popupbox">
+      <div>
+        <div class="${badgeCls}">NO.${it.no}</div>
+        <div class="addrline" title="${safeAddr}">${safeAddr}</div>
+      </div>
+      <button class="navbtn" onclick="window.__goNav('${safeId}')">导航</button>
+    </div>
+  `;
+}
+
+window.__goNav = function(id){
+  const it = items.find(x=>x.id===id);
+  if(it) goNav(it);
+}
+
+async function buildMap(){
+  if(!map) initMap();
+
+  const raw=document.getElementById("input").value||"";
+  const lines=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+  items = lines.map((l,i)=>normalizeLine(l,i)).filter(Boolean);
+
+  save();
+  updateStats();
+
+  layer.clearLayers();
+  const bounds=[];
+
+  for(const it of items){
+    if(!it.addr) continue;
+    const g=await geocode(it.addr);
+    if(!g || !isFinite(g.lat) || !isFinite(g.lon)) continue;
+
+    const icon=L.divIcon({className:"", html:makePinHtml(it), iconSize:[34,34], iconAnchor:[17,17]});
+    const m=L.marker([g.lat,g.lon],{icon}).addTo(layer);
+    m.bindPopup(makePopupHtml(it),{closeButton:false, autoClose:true, closeOnClick:true});
+    bounds.push([g.lat,g.lon]);
+
+    await new Promise(res=>setTimeout(res, 1000));
+  }
+
+  if(bounds.length) map.fitBounds(bounds,{padding:[20,20]});
+}
+
+load();
+items = (document.getElementById("input").value||"")
+  .split(/\n+/).map((l,i)=>normalizeLine(l,i)).filter(Boolean);
+updateStats();
 </script>
 </body>
 </html>
