@@ -1,118 +1,621 @@
 <!doctype html>
 <html lang="zh">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>单点导航（B版·带总数）</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>单点导航（列表+地图·总数点）</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<style>
-body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto;margin:0;padding:12px;background:#f5f5f5}
-h3{margin:6px 0 10px}
-textarea{width:100%;height:140px;border-radius:10px;border:1px solid #ddd;padding:10px;font-size:14px}
-button{border:0;border-radius:10px;padding:10px 14px;font-size:15px}
-.primary{background:#1a73e8;color:#fff}
-.ghost{background:#fff;border:1px solid #ddd}
-.small{font-size:12px;color:#666;margin:6px 0}
-#stats{font-size:14px;font-weight:700;margin:8px 0}
-#map{height:60vh;border-radius:12px;margin-top:10px}
-.marker{
-  width:34px;height:34px;border-radius:50%;
-  background:#000;color:#fff;
-  display:flex;align-items:center;justify-content:center;
-  font-weight:700;font-size:14px
-}
-.marker.done{background:#aaa}
-</style>
+  <style>
+    :root{
+      --blue:#1a73e8;
+      --bg:#f5f5f5;
+      --card:#fff;
+      --border:#ddd;
+      --text:#111;
+      --muted:#666;
+    }
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;
+      margin:0; padding:12px; background:var(--bg); color:var(--text);
+    }
+    h2{margin:6px 0 10px}
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+    textarea{
+      width:100%; height:150px; border-radius:12px; border:1px solid var(--border);
+      padding:10px; font-size:14px; box-sizing:border-box; background:#fff;
+    }
+    input{
+      width:100%; border-radius:12px; border:1px solid var(--border);
+      padding:10px; font-size:14px; box-sizing:border-box; background:#fff;
+    }
+    button{
+      border:0; border-radius:12px; padding:10px 14px; font-size:15px;
+      cursor:pointer;
+    }
+    .primary{background:var(--blue); color:#fff}
+    .ghost{background:#fff; border:1px solid var(--border); color:#111}
+    .tabs{margin-top:10px}
+    .tabBtn{background:#fff;border:1px solid var(--border)}
+    .tabBtn.active{background:var(--blue); color:#fff; border-color:var(--blue)}
+    .stats{
+      margin-top:10px; font-size:16px; font-weight:700;
+      background:#fff; border:1px solid var(--border); border-radius:12px;
+      padding:10px 12px;
+    }
+    .hint{color:var(--muted); font-size:13px; margin-top:6px}
+
+    /* list cards */
+    #listWrap{margin-top:10px}
+    .card{
+      background:var(--card); border-radius:14px; padding:12px;
+      margin-top:10px; border:1px solid #eee;
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .left{
+      flex:1; min-width:0;
+    }
+    .badge{
+      display:inline-block; padding:4px 8px; border-radius:999px;
+      background:#eef2ff; font-weight:800; font-size:12px; margin-right:8px;
+      vertical-align:middle;
+    }
+    .addr{font-size:15px; line-height:1.25; word-break:break-word}
+    .city{font-size:13px; color:var(--muted); margin-top:4px}
+    .right{
+      display:flex; align-items:center; gap:10px;
+    }
+    .check{
+      width:26px; height:26px; border-radius:999px;
+      border:2px solid #cfcfcf; display:flex; align-items:center; justify-content:center;
+      flex:0 0 26px;
+      background:#fff;
+    }
+    .check.done{
+      background:#e7f2ff; border-color:#9bc2ff;
+    }
+    .check.done:after{
+      content:"✓"; font-weight:900; font-size:16px; color:#2b6cff;
+      transform: translateY(-1px);
+    }
+    .navBtn{
+      background:#2b6cff; color:#fff; border-radius:14px;
+      padding:12px 14px; font-weight:800;
+      min-width:86px;
+    }
+
+    /* map */
+    #mapWrap{margin-top:10px; display:none}
+    #map{
+      height:56vh;
+      border-radius:14px;
+      border:1px solid #e7e7e7;
+      overflow:hidden;
+      background:#fff;
+    }
+    .mapActions{margin-top:10px; display:flex; gap:10px; flex-wrap:wrap}
+    .small{font-size:12px;color:var(--muted);margin-top:8px}
+
+    /* Leaflet label marker */
+    .labelDot{
+      background:#111; color:#fff; border-radius:999px;
+      padding:6px 10px; font-weight:900; font-size:15px;
+      border:2px solid rgba(255,255,255,.85);
+      box-shadow:0 4px 14px rgba(0,0,0,.18);
+      text-align:center;
+      min-width:44px;
+    }
+    .labelDot.red{background:#d12a2a}
+    .labelDot.total{background:#111}
+    .popupBox{
+      font-size:14px; line-height:1.3;
+    }
+    .popupBox b{font-size:16px}
+    .popupBtn{
+      display:inline-block; margin-top:8px; background:var(--blue); color:#fff;
+      padding:10px 12px; border-radius:12px; text-decoration:none; font-weight:800;
+    }
+  </style>
 </head>
 
 <body>
+  <h2>单点导航（列表+地图）</h2>
 
-<h3>单点导航（升级版）</h3>
+  <textarea id="input" placeholder="每行一单（支持：路线号+地址 混一起）
+例：
+773  211 Beecham Dr #116, Crafton, PA
+700  4450 Steubenville Pike, Pittsburgh, PA
+也支持：
+NO.773 211 Beecham Dr, Crafton, PA
+"></textarea>
 
-<textarea id="input" placeholder="每行一单（路线号 地址）
-702 4450 Steubenville Pike, Pittsburgh, PA
-703 1107 East Windhaven Rd, Pittsburgh, PA"></textarea>
+  <div class="row" style="margin-top:10px">
+    <button class="primary" onclick="buildAll()">生成列表</button>
+    <button class="ghost" onclick="clearToday()">清空今天内容</button>
+  </div>
 
-<div style="margin-top:8px">
-  <button class="primary" onclick="build()">生成地图</button>
-  <button class="ghost" onclick="clearAll()">清空</button>
-</div>
+  <div class="tabs row">
+    <button id="btnList" class="tabBtn active" onclick="showTab('list')">列表模式</button>
+    <button id="btnMap" class="tabBtn" onclick="showTab('map')">地图模式</button>
+  </div>
 
-<div id="stats">今日总数：0　已送：0　剩余：0</div>
-<div class="small">地图点=路线号｜点数字→小卡片→导航（自动✅）</div>
+  <div class="stats" id="stat">📦 今日共 0 单 ｜ 已送 0 ｜ 剩余 0</div>
+  <div class="hint">✅ 点击“导航”会自动打勾（从地图点或列表都一样）</div>
 
-<div id="map"></div>
+  <!-- Search -->
+  <div style="margin-top:10px">
+    <input id="search" placeholder="搜索：输入路线号 / 街道 / 城市（例如 773 或 Pike）" oninput="renderList()">
+  </div>
+
+  <!-- List -->
+  <div id="listWrap"></div>
+
+  <!-- Map -->
+  <div id="mapWrap">
+    <div class="mapActions">
+      <button class="primary" onclick="buildMap()">生成地图点</button>
+      <button class="ghost" onclick="fitAll()">缩放到全部点</button>
+    </div>
+    <div class="small">地图点=路线号；点一下弹出卡片→“导航”即可（自动✅）</div>
+    <div id="map"></div>
+  </div>
 
 <script>
-let map, items=[], done=new Set();
+/** =========================
+ *  数据模型
+ *  ========================= */
+const STORAGE_KEY = "route_nav_today_v3";
+const STORAGE_DAY_KEY = "route_nav_day_v3";
 
-function save(){
-  localStorage.setItem("route_done",JSON.stringify([...done]));
+let orders = []; // {id, route, addr, queryAddr, delivered, lat, lng}
+let map, markersLayer, totalMarker;
+
+/** =========================
+ *  工具函数
+ *  ========================= */
+function todayKey(){
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
 }
-function load(){
+
+function saveState(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({orders}));
+  localStorage.setItem(STORAGE_DAY_KEY, todayKey());
+}
+
+function loadState(){
+  const savedDay = localStorage.getItem(STORAGE_DAY_KEY);
+  if(savedDay !== todayKey()) return false;
+
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if(!raw) return false;
   try{
-    done=new Set(JSON.parse(localStorage.getItem("route_done")||"[]"));
+    const data = JSON.parse(raw);
+    if(data && Array.isArray(data.orders)){
+      orders = data.orders;
+      return true;
+    }
   }catch(e){}
-}
-function updateStats(){
-  const total=items.length;
-  const d=items.filter(i=>done.has(i.id)).length;
-  document.getElementById("stats").textContent=
-    `今日总数：${total}　已送：${d}　剩余：${total-d}`;
+  return false;
 }
 
-function parseLine(line,i){
-  const m=line.match(/^(\d+)\s+(.+)/);
-  if(!m) return null;
-  return {id:m[1],addr:m[2],idx:i};
-}
-
-function build(){
-  if(map){map.remove()}
-  map=L.map("map").setView([40.44,-79.99],12);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-
-  items=document.getElementById("input").value
-    .split(/\n+/).map((l,i)=>parseLine(l.trim(),i)).filter(Boolean);
-
-  updateStats();
-
-  items.forEach(it=>{
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(it.addr)}`)
-      .then(r=>r.json()).then(d=>{
-        if(!d[0])return;
-        const lat=+d[0].lat,lng=+d[0].lon;
-        const icon=L.divIcon({
-          className:"",
-          html:`<div class="marker ${done.has(it.id)?"done":""}">${it.id}</div>`
-        });
-        const m=L.marker([lat,lng],{icon}).addTo(map);
-        m.on("click",()=>{
-          const ok=confirm(`NO.${it.id}\n${it.addr}\n\n开始导航？`);
-          if(ok){
-            done.add(it.id);save();updateStats();
-            window.location.href=
-              `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(it.addr)}`;
-          }
-        });
-      });
-  });
-}
-
-function clearAll(){
-  if(confirm("清空今天内容？")){
-    document.getElementById("input").value="";
-    items=[];done.clear();save();updateStats();
-    if(map)map.remove();
+function clearToday(){
+  if(!confirm("确定清空今天的输入和打勾记录吗？")) return;
+  orders = [];
+  document.getElementById("input").value = "";
+  document.getElementById("search").value = "";
+  saveState();
+  renderAll();
+  if(map) {
+    markersLayer.clearLayers();
+    if(totalMarker){ map.removeLayer(totalMarker); totalMarker=null; }
   }
 }
 
-load();
-updateStats();
-</script>
+/** =========================
+ *  解析：把“路线号”和“地址”分开
+ *  - 支持：773 211 xxx
+ *  - 支持：NO.773 211 xxx
+ *  - 支持：773, 211 xxx
+ *  - 支持：773: 211 xxx
+ *  - 支持：773- 211 xxx
+ *  ========================= */
+function parseLine(line){
+  let s = line.trim();
+  if(!s) return null;
 
+  // 去掉多余前缀
+  s = s.replace(/^\s*(no\.?|route|线路号)\s*/i, "").trim();
+
+  // 统一分隔符
+  s = s.replace(/[，、]/g, ",").trim();
+
+  // 1) 优先抓开头的数字当路线号
+  //    允许 "773" 或 "773," 或 "773:" 或 "773-" 后面跟地址
+  let m = s.match(/^(\d{2,6})\s*[,:\-]?\s+(.*)$/);
+  if(m){
+    const route = m[1].trim();
+    const addr = m[2].trim();
+    if(!addr) return null;
+    return {route, addr};
+  }
+
+  // 2) 如果不是以数字开头，就尝试在前面找一个数字块
+  //    例："订单 773 211 Beecham..."
+  m = s.match(/(\d{2,6})\s+(.*)$/);
+  if(m){
+    const route = m[1].trim();
+    const addr = m[2].trim();
+    return {route, addr};
+  }
+
+  // 3) 实在没有路线号：当成 addr，route 用序号
+  return {route:"", addr:s};
+}
+
+function normalizeAddr(addr){
+  // 去掉多余空格
+  return addr.replace(/\s+/g, " ").trim();
+}
+
+/** =========================
+ *  构建列表数据
+ *  ========================= */
+function buildAll(){
+  const text = document.getElementById("input").value || "";
+  const lines = text.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+
+  const newOrders = [];
+  let autoNo = 1;
+
+  for(const line of lines){
+    const p = parseLine(line);
+    if(!p) continue;
+    const addr = normalizeAddr(p.addr);
+
+    let route = p.route;
+    if(!route){
+      // 没写路线号就自动 NO.xxx
+      route = String(autoNo++).padStart(3,'0');
+    }
+
+    // 让导航只用地址，不带路线号
+    const queryAddr = addr;
+
+    newOrders.push({
+      id: cryptoRandomId(),
+      route,
+      addr,
+      queryAddr,
+      delivered: false,
+      lat: null,
+      lng: null,
+    });
+  }
+
+  orders = newOrders;
+  saveState();
+  renderAll();
+}
+
+function cryptoRandomId(){
+  // 简单可用的 id
+  return Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+
+/** =========================
+ *  显示：统计
+ *  ========================= */
+function updateStats(){
+  const total = orders.length;
+  const sent = orders.filter(o=>o.delivered).length;
+  const left = total - sent;
+  document.getElementById("stat").innerHTML = `📦 <b>今日共 ${total} 单</b> ｜ 已送 ${sent} ｜ 剩余 ${left}`;
+}
+
+/** =========================
+ *  显示：列表
+ *  ========================= */
+function renderList(){
+  const wrap = document.getElementById("listWrap");
+  wrap.innerHTML = "";
+
+  const q = (document.getElementById("search").value || "").trim().toLowerCase();
+
+  const filtered = orders.filter(o=>{
+    if(!q) return true;
+    return (o.route && o.route.toLowerCase().includes(q))
+      || (o.addr && o.addr.toLowerCase().includes(q));
+  });
+
+  filtered.forEach((o, idx)=>{
+    const card = document.createElement("div");
+    card.className = "card" + (o.delivered ? " delivered" : "");
+
+    const left = document.createElement("div");
+    left.className = "left";
+
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    // 显示成 NO.773 样式（你想要“像序列号”）
+    badge.textContent = `NO.${o.route}`;
+
+    const addr = document.createElement("div");
+    addr.className = "addr";
+    addr.innerHTML = `${badge.outerHTML} ${escapeHtml(firstLineAddr(o.addr))}`;
+
+    const city = document.createElement("div");
+    city.className = "city";
+    city.textContent = restAddr(o.addr);
+
+    left.appendChild(addr);
+    if(city.textContent) left.appendChild(city);
+
+    const right = document.createElement("div");
+    right.className = "right";
+
+    const check = document.createElement("div");
+    check.className = "check" + (o.delivered ? " done" : "");
+    check.title = "点这里手动打勾/取消";
+    check.onclick = ()=>toggleDelivered(o.id);
+
+    const nav = document.createElement("button");
+    nav.className = "navBtn";
+    nav.textContent = "导航";
+    nav.onclick = ()=>startNav(o.id);
+
+    right.appendChild(check);
+    right.appendChild(nav);
+
+    card.appendChild(left);
+    card.appendChild(right);
+
+    wrap.appendChild(card);
+  });
+
+  updateStats();
+}
+
+function firstLineAddr(addr){
+  // 主行：把逗号后的城市州留给下一行显示更整齐
+  return addr;
+}
+function restAddr(addr){
+  return "";
+}
+
+function escapeHtml(s){
+  return (s||"").replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+  }[c]));
+}
+
+/** =========================
+ *  打勾/导航
+ *  ========================= */
+function toggleDelivered(id){
+  const o = orders.find(x=>x.id===id);
+  if(!o) return;
+  o.delivered = !o.delivered;
+  saveState();
+  renderAll();
+  refreshMapStyles();
+}
+
+function startNav(id){
+  const o = orders.find(x=>x.id===id);
+  if(!o) return;
+
+  // 打开 Google Maps：只用地址，不带路线号
+  const url = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(o.queryAddr);
+  window.open(url, "_blank");
+
+  // 自动打勾
+  if(!o.delivered){
+    o.delivered = true;
+    saveState();
+    renderAll();
+    refreshMapStyles();
+  }
+}
+
+/** =========================
+ *  Tabs
+ *  ========================= */
+function showTab(which){
+  const btnList = document.getElementById("btnList");
+  const btnMap = document_toggle("btnMap");
+
+  document.getElementById("listWrap").style.display = (which==="list") ? "block" : "none";
+  document.getElementById("search").parentElement.style.display = (which==="list") ? "block" : "none";
+  document.getElementById("mapWrap").style.display = (which==="map") ? "block" : "none";
+
+  btnList.classList.toggle("active", which==="list");
+  document.getElementById("btnMap").classList.toggle("active", which==="map");
+
+  if(which==="map"){
+    initMapIfNeeded();
+    setTimeout(()=>map.invalidateSize(), 200);
+  }
+}
+function document_toggle(id){ return document.getElementById(id); }
+
+/** =========================
+ *  Map
+ *  ========================= */
+function initMapIfNeeded(){
+  if(map) return;
+
+  map = L.map('map', {zoomControl:true}).setView([40.4406, -79.9959], 9); // Pittsburgh 默认
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: ''
+  }).addTo(map);
+
+  markersLayer = L.layerGroup().addTo(map);
+}
+
+async function buildMap(){
+  initMapIfNeeded();
+  markersLayer.clearLayers();
+  if(totalMarker){ map.removeLayer(totalMarker); totalMarker=null; }
+
+  // 1) 先画“总数圆点”（地图中心显示今日总单量，不可点击）
+  const total = orders.length;
+  totalMarker = makeLabelMarker(null, null, `${total}`, "total", true);
+  // 先放在 Pittsburgh 附近，后面 fitAll 时会自动移动到中心
+  totalMarker.setLatLng([40.4406, -79.9959]).addTo(map);
+
+  // 2) 再地理编码每条地址并打点
+  const pts = [];
+  for(const o of orders){
+    // 已经有坐标就直接用（避免重复请求）
+    if(o.lat && o.lng){
+      pts.push([o.lat,o.lng]);
+      addOrderMarker(o);
+      continue;
+    }
+
+    const pos = await geocodeNominatim(o.queryAddr);
+    if(pos){
+      o.lat = pos.lat; o.lng = pos.lng;
+      pts.push([o.lat,o.lng]);
+      addOrderMarker(o);
+      saveState();
+    }
+  }
+
+  // 3) 缩放到所有点
+  fitAll();
+
+  // 4) 把总数点移动到当前地图中心
+  if(totalMarker){
+    const c = map.getCenter();
+    totalMarker.setLatLng(c);
+  }
+
+  refreshMapStyles();
+}
+
+function makeLabelMarker(lat, lng, text, type, nonClickable){
+  const cls = (type==="red") ? "labelDot red" : (type==="total" ? "labelDot total" : "labelDot");
+  const icon = L.divIcon({
+    className: "",
+    html: `<div class="${cls}">${text}</div>`,
+    iconSize: [60, 30],
+    iconAnchor: [30, 15]
+  });
+
+  const m = L.marker([lat||0, lng||0], {icon, interactive: !nonClickable});
+  return m;
+}
+
+function addOrderMarker(o){
+  const text = `${o.route}`;
+  const m = makeLabelMarker(o.lat, o.lng, text, o.delivered ? "red" : "black", false);
+
+  const html = `
+    <div class="popupBox">
+      <b>NO.${escapeHtml(o.route)}</b><br>
+      ${escapeHtml(o.addr)}<br>
+      <a class="popupBtn" href="javascript:void(0)" onclick="window.__startNavFromMap('${o.id}')">导航（自动✅）</a>
+    </div>
+  `;
+  m.bindPopup(html);
+
+  markersLayer.addLayer(m);
+  o.__markerId = m._leaflet_id;
+}
+
+window.__startNavFromMap = function(id){
+  startNav(id);
+
+  // 关闭 popup
+  if(map) map.closePopup();
+};
+
+function refreshMapStyles(){
+  if(!map || !markersLayer) return;
+
+  // 重新生成 marker 颜色（简单粗暴但稳定）
+  const wasCenter = map.getCenter();
+  const wasZoom = map.getZoom();
+
+  // 保留总数点
+  const cTotal = totalMarker ? totalMarker.getLatLng() : null;
+  const totalText = orders.length;
+
+  markersLayer.clearLayers();
+  orders.forEach(o=>{
+    if(o.lat && o.lng) addOrderMarker(o);
+  });
+
+  // 重新放回总数点到中心
+  if(totalMarker){
+    map.removeLayer(totalMarker);
+    totalMarker = makeLabelMarker(cTotal?.lat||wasCenter.lat, cTotal?.lng||wasCenter.lng, `${totalText}`, "total", true);
+    totalMarker.addTo(map);
+  }
+
+  map.setView(wasCenter, wasZoom, {animate:false});
+}
+
+function fitAll(){
+  if(!map) return;
+  const pts = orders.filter(o=>o.lat && o.lng).map(o=>[o.lat,o.lng]);
+  if(pts.length===0) return;
+  const bounds = L.latLngBounds(pts);
+  map.fitBounds(bounds.pad(0.25));
+
+  // 总数点固定放在中心（不复杂）
+  if(totalMarker){
+    const c = map.getCenter();
+    totalMarker.setLatLng(c);
+  }
+}
+
+/** =========================
+ *  Geocoding（免费 Nominatim）
+ *  注意：大量地址（200+）会慢，建议你后续用“分批生成地图点”
+ *  ========================= */
+async function geocodeNominatim(addr){
+  try{
+    const url = "https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(addr);
+    const res = await fetch(url, {headers: {"Accept":"application/json"}});
+    const data = await res.json();
+    if(data && data[0]){
+      return {lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon)};
+    }
+  }catch(e){}
+  return null;
+}
+
+/** =========================
+ *  统一渲染
+ *  ========================= */
+function renderAll(){
+  updateStats();
+  renderList();
+}
+
+/** =========================
+ *  初始化：自动恢复今天内容
+ *  ========================= */
+(function init(){
+  const ok = loadState();
+  if(ok){
+    // 恢复输入框（让你能看到原始文本）
+    const lines = orders.map(o=>`${o.route} ${o.addr}`);
+    document.getElementById("input").value = lines.join("\n");
+  }
+  renderAll();
+})();
+</script>
 </body>
 </html>
