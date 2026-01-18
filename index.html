@@ -5,55 +5,200 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>单点导航</title>
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto;margin:0;padding:12px;background:#f5f5f5}
-textarea{width:100%;height:160px;border-radius:10px;border:1px solid #ddd;padding:10px}
-button{border:0;border-radius:10px;padding:10px 14px;font-size:16px}
-.primary{background:#1a73e8;color:#fff}
-.card{background:#fff;border-radius:12px;padding:12px;margin-top:10px;display:flex;justify-content:space-between;align-items:center;gap:10px}
-.addr{font-size:14px;color:#333}
-.route{font-weight:bold;color:#d60000;margin-right:6px}
+  body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto;margin:0;padding:12px;background:#f5f5f5}
+  h3{margin:6px 0 10px 0}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  textarea{width:100%;height:170px;border-radius:10px;border:1px solid #ddd;padding:10px;font-size:14px;box-sizing:border-box}
+  input{width:100%;border-radius:10px;border:1px solid #ddd;padding:10px;font-size:14px;box-sizing:border-box}
+  button{border:0;border-radius:10px;padding:10px 14px;font-size:16px}
+  .primary{background:#1a73e8;color:#fff}
+  .ghost{background:#fff;border:1px solid #ddd}
+  .small{font-size:12px;color:#666;margin:8px 0}
+  .stats{display:flex;gap:12px;flex-wrap:wrap}
+  .pill{background:#fff;border:1px solid #e5e5e5;border-radius:999px;padding:6px 10px;font-size:13px}
+  .card{
+    background:#fff;border-radius:12px;padding:12px;margin-top:10px;
+    display:flex;justify-content:space-between;align-items:center;gap:10px
+  }
+  .left{flex:1;min-width:0}
+  .addr{font-size:14px;color:#333;word-break:break-word}
+  .route{font-weight:800;color:#d60000;margin-right:6px}
+  .actions{display:flex;gap:8px;align-items:center}
+  .delivered{opacity:.45}
+  .check{transform:scale(1.2)}
 </style>
 </head>
 <body>
 
-<h3>单点导航</h3>
+<h3>单点导航（升级版）</h3>
 
-<textarea id="input" placeholder="每行一单（想送哪单就点哪单）
+<div class="small">
+  ✅ 自动保存（刷新不丢）｜✅ 已送打勾｜🔍 搜索快速找单
+</div>
+
+<textarea id="input" placeholder="每行一单（建议：路线号, 地址）
 566, 583 Gardenia Dr, Monessen, PA
 565, 6402 Tunnel Hollow Rd, Elizabeth, PA"></textarea>
 
-<button class="primary" onclick="build()">生成列表</button>
+<div class="row" style="margin-top:10px">
+  <button class="primary" onclick="build()">生成列表</button>
+  <button class="ghost" onclick="clearAll()">清空今天内容</button>
+</div>
+
+<div style="margin-top:10px">
+  <input id="q" placeholder="搜索：输入路线号 / 街道 / 城市（例如 566 或 Tunnel）" oninput="render()">
+</div>
+
+<div class="small stats" style="margin-top:10px">
+  <span class="pill">总数：<b id="t">0</b></span>
+  <span class="pill">已送：<b id="d">0</b></span>
+  <span class="pill">剩余：<b id="r">0</b></span>
+</div>
 
 <div id="list"></div>
 
 <script>
+const LS_TEXT = "routeNav_text_v1";
+const LS_DONE = "routeNav_done_v1";
+
+let items = [];          // [{id, route, addr, raw}]
+let doneSet = new Set(); // ids delivered
+
+function normalizeLine(line){
+  // 允许： "566, 地址..." 或者只有地址
+  let route = "", addr = line.trim();
+  if(addr.includes(",")){
+    const i = addr.indexOf(",");
+    route = addr.slice(0,i).trim();
+    addr = addr.slice(i+1).trim();
+  }
+  return {route, addr};
+}
+
+function makeId(raw){
+  // 以内容做稳定ID：同一行重复也能区分（加序号在 build 时处理）
+  return raw;
+}
+
+function saveText(){
+  localStorage.setItem(LS_TEXT, document.getElementById("input").value || "");
+}
+function saveDone(){
+  localStorage.setItem(LS_DONE, JSON.stringify(Array.from(doneSet)));
+}
+function loadState(){
+  const t = localStorage.getItem(LS_TEXT);
+  if(t !== null) document.getElementById("input").value = t;
+
+  try{
+    const arr = JSON.parse(localStorage.getItem(LS_DONE) || "[]");
+    doneSet = new Set(arr);
+  }catch(e){
+    doneSet = new Set();
+  }
+}
+
 function build(){
-  const list = document.getElementById('list');
-  list.innerHTML='';
-  const lines = document.getElementById('input').value
+  const lines = (document.getElementById("input").value || "")
     .split(/\n+/).map(x=>x.trim()).filter(Boolean);
 
-  for(const line of lines){
-    let route='', addr=line;
-    if(line.includes(',')){
-      const i=line.indexOf(',');
-      route=line.slice(0,i).trim();
-      addr=line.slice(i+1).trim();
-    }
-    const url = "https://www.google.com/maps/dir/?api=1&destination="
-                + encodeURIComponent(addr);
+  // 构建 items；处理完全相同的行：加 #1 #2 让每条都能单独标记已送
+  const counter = new Map();
+  items = lines.map(raw=>{
+    const {route, addr} = normalizeLine(raw);
+    const base = makeId(raw);
+    const n = (counter.get(base) || 0) + 1;
+    counter.set(base, n);
+    const id = n === 1 ? base : (base + " #" + n);
+    return {id, route, addr, raw};
+  });
 
-    const div = document.createElement('div');
-    div.className='card';
-    div.innerHTML = `
-      <div class="addr">
-        ${route?`<span class="route">${route}</span>`:''}
-        ${addr}
+  // 清理 doneSet 里不存在的 id（避免历史污染）
+  const valid = new Set(items.map(x=>x.id));
+  doneSet = new Set(Array.from(doneSet).filter(id=>valid.has(id)));
+  saveDone();
+
+  render();
+}
+
+function render(){
+  const list = document.getElementById("list");
+  list.innerHTML = "";
+
+  const q = (document.getElementById("q").value || "").trim().toLowerCase();
+
+  const filtered = items.filter(it=>{
+    if(!q) return true;
+    const hay = (it.route + " " + it.addr).toLowerCase();
+    return hay.includes(q);
+  });
+
+  // stats
+  const total = items.length;
+  const delivered = Array.from(doneSet).length;
+  document.getElementById("t").textContent = total;
+  document.getElementById("d").textContent = delivered;
+  document.getElementById("r").textContent = Math.max(0, total - delivered);
+
+  for(const it of filtered){
+    const isDone = doneSet.has(it.id);
+    const url = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(it.addr);
+
+    const card = document.createElement("div");
+    card.className = "card" + (isDone ? " delivered" : "");
+    card.innerHTML = `
+      <div class="left">
+        <div class="addr">
+          ${it.route ? `<span class="route">${escapeHtml(it.route)}</span>` : ""}
+          ${escapeHtml(it.addr)}
+        </div>
       </div>
-      <button class="primary" onclick="location.href='${url}'">▶ 导航</button>
+      <div class="actions">
+        <label title="已送" style="display:flex;align-items:center;gap:6px;font-size:13px;color:#444">
+          <input class="check" type="checkbox" ${isDone ? "checked" : ""} onchange="toggleDone('${escapeAttr(it.id)}', this.checked)">
+          已送
+        </label>
+        <button class="primary" onclick="location.href='${url}'">▶ 导航</button>
+      </div>
     `;
-    list.appendChild(div);
+    list.appendChild(card);
   }
+}
+
+function toggleDone(id, checked){
+  if(checked) doneSet.add(id);
+  else doneSet.delete(id);
+  saveDone();
+  render();
+}
+
+function clearAll(){
+  if(!confirm("确定清空？这会清掉输入内容和已送标记。")) return;
+  document.getElementById("input").value = "";
+  document.getElementById("q").value = "";
+  items = [];
+  doneSet = new Set();
+  localStorage.removeItem(LS_TEXT);
+  localStorage.removeItem(LS_DONE);
+  render();
+}
+
+function escapeHtml(s){
+  return (s||"").replace(/[&<>"']/g, c=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+}
+function escapeAttr(s){
+  return (s||"").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+}
+
+// 自动保存输入框
+document.getElementById("input").addEventListener("input", saveText);
+
+// 页面加载：恢复上次内容 + 已送标记，并自动生成列表
+loadState();
+if((document.getElementById("input").value || "").trim()){
+  build();
+}else{
+  render();
 }
 </script>
 
