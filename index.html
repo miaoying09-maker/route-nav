@@ -1,330 +1,482 @@
 <!doctype html>
 <html lang="zh">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>单点导航（升级版）</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>单点导航（升级版）</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<style>
-  body{
-    font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto;
-    margin:0;padding:12px;background:#f6f7f9
-  }
-  h2{margin:6px 0 10px;font-size:28px}
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto; margin:0; background:#f5f5f5;}
+    .wrap{padding:12px; max-width:760px; margin:0 auto;}
+    h2{margin:10px 0 10px; font-size:28px;}
+    textarea{width:100%; height:150px; box-sizing:border-box; border-radius:12px; border:1px solid #ddd; padding:12px; font-size:15px; background:#fff;}
+    button{border:0; border-radius:12px; padding:12px 16px; font-size:16px;}
+    .primary{background:#1a73e8; color:#fff;}
+    .ghost{background:#fff; border:1px solid #ddd; color:#1a73e8;}
+    .row{display:flex; gap:10px; flex-wrap:wrap; margin:10px 0;}
+    .tabs{display:flex; gap:10px; margin-top:6px;}
+    .tab{background:#fff; border:1px solid #ddd; color:#333;}
+    .tab.active{background:#1a73e8; color:#fff; border-color:#1a73e8;}
 
-  textarea{
-    width:100%;height:160px;border-radius:14px;border:1px solid #ddd;
-    padding:12px;font-size:14px;box-sizing:border-box;background:#fff
-  }
+    .summary{margin:8px 0 0; color:#333; font-size:16px; font-weight:700;}
+    .sub{margin:6px 0 10px; color:#666; font-size:13px;}
 
-  button{
-    border:0;border-radius:14px;
-    padding:12px 16px;font-size:16px;font-weight:700
-  }
-  .primary{background:#1677ff;color:#fff}
-  .ghost{background:#fff;border:1px solid #ddd;color:#1677ff}
+    .list{margin-top:8px;}
+    .card{
+      background:#fff; border-radius:16px; padding:14px 14px;
+      display:flex; justify-content:space-between; align-items:center;
+      margin:10px 0; box-shadow:0 1px 0 rgba(0,0,0,.04);
+    }
+    .left{min-width:0;}
+    .no{display:inline-block; padding:3px 10px; border-radius:999px; background:#f0f0f0; font-weight:800; margin-right:8px;}
+    .addr{font-size:18px; font-weight:800; color:#c62828; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:520px;}
+    .city{color:#666; margin-top:4px; font-size:14px;}
+    .actions{display:flex; gap:12px; align-items:center;}
+    .chk{width:22px; height:22px;}
+    .navbtn{
+      background:#1a73e8; color:#fff; border-radius:14px; padding:10px 14px;
+      font-size:16px; font-weight:800;
+    }
+    .delivered{opacity:.40;}
 
-  .row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
-  .tabs{display:flex;gap:10px;margin:10px 0}
+    /* 地图容器（非全屏时） */
+    #mapHost{
+      background:#fff; border-radius:16px; overflow:hidden; margin-top:10px;
+      box-shadow:0 1px 0 rgba(0,0,0,.04);
+    }
+    #map{height:420px; width:100%;}
+    .mapTopRow{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:10px;}
 
-  #stat{
-    margin-top:8px;font-size:16px;color:#333;
-    display:flex;align-items:center;gap:10px;flex-wrap:wrap
-  }
-  #stat b{font-size:18px}
-  .pill{
-    background:#fff;border:1px solid #e6e6e6;border-radius:999px;
-    padding:8px 12px;display:inline-flex;gap:10px;align-items:center
-  }
+    /* 全屏弹层：按钮不在地图层里，iPhone 更稳 */
+    .fsMask{
+      position:fixed; inset:0; background:#00000066;
+      display:none; z-index:999999;
+    }
+    .fsMask.show{display:block;}
+    .fsPanel{
+      position:fixed; inset:0; background:#fff; z-index:1000000;
+      display:none; flex-direction:column;
+      padding-top: env(safe-area-inset-top);
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    .fsPanel.show{display:flex;}
+    .fsBar{
+      display:flex; justify-content:space-between; align-items:center;
+      padding:10px 12px; border-bottom:1px solid #eee;
+    }
+    .fsTitle{font-weight:900; font-size:16px;}
+    .fsBtn{
+      background:#111; color:#fff; border-radius:12px;
+      padding:10px 12px; font-weight:900;
+    }
+    #mapFS{flex:1; min-height:0;}
+    #mapFSInner{height:100%; width:100%;}
 
-  /* 列表卡片 */
-  .card{
-    background:#fff;border-radius:16px;padding:12px;margin-top:12px;
-    display:flex;gap:12px;align-items:center;justify-content:space-between
-  }
-  .left{
-    display:flex;gap:12px;align-items:flex-start;min-width:0
-  }
-  .no{
-    flex:0 0 auto;
-    background:#1677ff;color:#fff;border-radius:14px;
-    padding:10px 12px;
-    font-weight:900;font-size:16px;line-height:1;
-    box-shadow:0 6px 14px rgba(22,119,255,.25)
-  }
-  .addr{
-    font-size:15px;line-height:1.3;word-break:break-word;
-    font-weight:700;color:#111
-  }
-  .sub{
-    margin-top:4px;font-size:12px;color:#666;font-weight:600
-  }
-  .actions{display:flex;gap:10px;align-items:center;flex:0 0 auto}
-  .check{width:22px;height:22px;transform:scale(1.15)}
-  .navBtn{
-    background:#1677ff;color:#fff;border-radius:14px;
-    padding:12px 14px;font-weight:900
-  }
-  .delivered{opacity:.5}
-  .small{font-size:12px;color:#666;margin-top:8px}
+    /* 地图标记：显示路线号 */
+    .pin{
+      width:46px; height:46px; border-radius:999px;
+      background:#111; color:#fff; display:flex; align-items:center; justify-content:center;
+      font-weight:900; font-size:16px;
+      box-shadow:0 8px 18px rgba(0,0,0,.25);
+      border:3px solid #fff;
+    }
+    .pin.red{background:#c62828;}
+    .pin.green{background:#2e7d32;}
 
-  /* 地图 */
-  #list{display:block}
-  #mapwrap{display:none;position:relative;margin-top:10px}
-  #map{
-    height:60vh;min-height:520px;border-radius:16px;overflow:hidden
-  }
-
-  /* 伪全屏（iPhone Safari 稳定） */
-  #mapwrap.fullscreenWrap{
-    position:fixed;left:0;top:0;right:0;bottom:0;
-    background:#fff;z-index:999999;padding:10px
-  }
-  #mapwrap.fullscreenWrap #map{
-    height:calc(100vh - 70px);
-    min-height:auto;border-radius:16px
-  }
-  body.lock{overflow:hidden}
-
-  .fullbtn{
-    position:absolute;right:16px;top:16px;z-index:9999;
-    background:#111;color:#fff;border-radius:999px;
-    padding:12px 14px;font-weight:900;display:flex;align-items:center;gap:8px
-  }
-
-  /* 地图标记：路线号更清晰 */
-  .marker{
-    background:#111;color:#fff;border-radius:999px;
-    width:44px;height:44px;
-    display:flex;align-items:center;justify-content:center;
-    font-weight:900;border:4px solid #fff;
-    box-shadow:0 10px 20px rgba(0,0,0,.2)
-  }
-  .marker.done{background:#1bbf5c}
-
-  /* 地图弹窗按钮更居中 */
-  .popupBtn{
-    width:100%;
-    background:#1677ff;color:#fff;border-radius:14px;
-    padding:12px 14px;font-weight:900;border:0
-  }
-</style>
+    .hidden{display:none !important;}
+  </style>
 </head>
 
 <body>
+  <div class="wrap">
+    <h2>单点导航（升级版）</h2>
 
-<h2>单点导航（升级版）</h2>
+    <textarea id="input" placeholder="每行一单（建议：路线号 空格 地址）
+例如：
+700 4450 Steubenville Pike, Pittsburgh, PA
+701 1107 East Windhaven Rd, Pittsburgh, PA"></textarea>
 
-<textarea id="input" placeholder="每行一单（推荐：路线号 空格 地址）
-802 902 Wilhelm St, Pittsburgh, PA
-803 900 Marena St, Pittsburgh, PA"></textarea>
+    <div class="row">
+      <button class="primary" onclick="buildList()">生成列表</button>
+      <button class="ghost" onclick="clearToday()">清空</button>
+    </div>
 
-<div class="row">
-  <button class="primary" onclick="build()">生成列表</button>
-  <button class="ghost" onclick="clearAll()">清空</button>
-</div>
+    <div class="tabs">
+      <button id="tabList" class="tab active" onclick="showMode('list')">列表模式</button>
+      <button id="tabMap" class="tab" onclick="showMode('map')">地图模式</button>
+    </div>
 
-<div class="tabs">
-  <button class="ghost" onclick="showList()">列表模式</button>
-  <button class="ghost" onclick="showMap()">地图模式</button>
-</div>
+    <div class="summary" id="summary">今日共 0 单 ｜ 已送 0 ｜ 剩余 0</div>
+    <div class="sub">✅ 点击“导航”会自动勾选（你回到页面时会看到已送）</div>
 
-<div id="stat"></div>
+    <!-- 列表 -->
+    <div id="list" class="list"></div>
 
-<div id="list"></div>
-
-<div id="mapwrap">
-  <button class="fullbtn" id="fullBtn">⛶ 全屏</button>
-  <div class="row">
-    <button class="primary" onclick="buildMap()">生成地图点</button>
+    <!-- 地图 -->
+    <div id="mapMode" class="hidden">
+      <div class="mapTopRow">
+        <button class="primary" onclick="genMapPins()">生成地图点</button>
+        <button class="ghost" onclick="openFullScreen()">全屏地图</button>
+      </div>
+      <div id="mapHost">
+        <div id="map"></div>
+      </div>
+      <div class="sub">地图点显示路线号，点一下会弹出卡片，点卡片里的“导航”可直达 Google Maps。</div>
+    </div>
   </div>
-  <div id="map"></div>
-  <div class="small">地图更清爽（无路名）。点路线号 → 导航 → 自动打勾 ✅</div>
-</div>
+
+  <!-- 全屏弹层（独立按钮，不在地图层里） -->
+  <div id="fsMask" class="fsMask" onclick="closeFullScreen()"></div>
+  <div id="fsPanel" class="fsPanel">
+    <div class="fsBar">
+      <div class="fsTitle">地图全屏</div>
+      <button class="fsBtn" onclick="closeFullScreen()">退出全屏 ✕</button>
+    </div>
+    <div id="mapFS">
+      <div id="mapFSInner"></div>
+    </div>
+  </div>
 
 <script>
-let data=[], leafletMap=null, markers=[], isFull=false;
+  // ====== 数据与存储 ======
+  const LS_KEY = "route_nav_vB_data";
+  let items = [];            // {no, addr, city, delivered, lat, lon}
+  let mode = "list";
 
-function parse(){
-  data=[];
-  const lines = input.value.split(/\n/).map(l=>l.trim()).filter(Boolean);
-  let idx=1;
-  lines.forEach(l=>{
-    // 支持：802 902 Wilhelm... 或 802, 902 Wilhelm...
-    let no=`NO.${idx}`;
-    let addr=l;
+  // ====== 地图对象 ======
+  let mapSmall = null;
+  let mapFS = null;
+  let markersSmall = [];
+  let markersFS = [];
 
-    const m = l.match(/^(\d+)[,\s]+(.+)$/);
-    if(m){
-      no = `NO.${m[1]}`;
-      addr = m[2].trim();
+  function load(){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(raw){
+        const obj = JSON.parse(raw);
+        items = obj.items || [];
+        document.getElementById("input").value = obj.input || "";
+        mode = obj.mode || "list";
+      }
+    }catch(e){}
+    showMode(mode, true);
+    render();
+  }
+
+  function save(){
+    localStorage.setItem(LS_KEY, JSON.stringify({
+      items,
+      input: document.getElementById("input").value,
+      mode
+    }));
+  }
+
+  function clearToday(){
+    if(!confirm("确定清空今天内容？")) return;
+    items = [];
+    document.getElementById("input").value = "";
+    save();
+    render();
+    clearMaps();
+  }
+
+  // ====== 解析输入：把路线号和地址分开（你要的“像序列号那样区分开”）======
+  function parseLines(text){
+    const lines = text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+    const out = [];
+    for(const line of lines){
+      // 支持：700 空格 地址； or NO.700 地址； or 700, 地址
+      const m = line.match(/^(?:NO\.?\s*)?(\d{2,6})[\s,，]+(.+)$/i);
+      if(m){
+        out.push({no: m[1], addr: m[2].trim()});
+      }else{
+        // 没有号码：自动给一个
+        out.push({no: "", addr: line});
+      }
+    }
+    // 没号的补号（按顺序）
+    let auto = 1;
+    for(const it of out){
+      if(!it.no){
+        it.no = "A" + String(auto++).padStart(3,"0");
+      }
+    }
+    return out;
+  }
+
+  function buildList(){
+    const text = document.getElementById("input").value.trim();
+    const parsed = parseLines(text);
+
+    // 保留之前 delivered 状态（同号同地址）
+    const oldMap = new Map(items.map(x => [x.no + "||" + x.addr, x]));
+    items = parsed.map(p=>{
+      const key = p.no + "||" + p.addr;
+      const old = oldMap.get(key);
+      return {
+        no: p.no,
+        addr: p.addr,
+        city: guessCity(p.addr),
+        delivered: old ? !!old.delivered : false,
+        lat: old ? old.lat : null,
+        lon: old ? old.lon : null
+      };
+    });
+
+    save();
+    render();
+    // 列表生成后，小地图也刷新（不自动定位，等你点“生成地图点”）
+    clearMaps();
+  }
+
+  function guessCity(addr){
+    // 简单提取 “, City, ST” 的 City，显示更干净
+    const parts = addr.split(",").map(s=>s.trim());
+    if(parts.length >= 2) return parts[1];
+    return "";
+  }
+
+  function render(){
+    // 统计
+    const total = items.length;
+    const delivered = items.filter(x=>x.delivered).length;
+    const left = total - delivered;
+    document.getElementById("summary").textContent = `今日共 ${total} 单 ｜ 已送 ${delivered} ｜ 剩余 ${left}`;
+
+    // 列表
+    const list = document.getElementById("list");
+    list.innerHTML = "";
+    items.forEach((it, idx)=>{
+      const card = document.createElement("div");
+      card.className = "card" + (it.delivered ? " delivered" : "");
+      card.innerHTML = `
+        <div class="left">
+          <div>
+            <span class="no">NO.${escapeHtml(it.no)}</span>
+            <span class="addr">${escapeHtml(shortAddr(it.addr))}</span>
+          </div>
+          <div class="city">${escapeHtml(it.city || "")}</div>
+        </div>
+        <div class="actions">
+          <input class="chk" type="checkbox" ${it.delivered ? "checked":""}
+            onchange="toggleDelivered(${idx}, this.checked)" />
+          <button class="navbtn" onclick="goNav(${idx})">▶ 导航</button>
+        </div>
+      `;
+      list.appendChild(card);
+    });
+  }
+
+  function shortAddr(a){
+    return a;
+  }
+
+  function toggleDelivered(i, v){
+    items[i].delivered = !!v;
+    save();
+    render();
+    // 地图上也同步颜色
+    recolorPins();
+  }
+
+  // ====== 导航：打开 Google Maps；并“延迟自动勾选” ======
+  function goNav(i){
+    const it = items[i];
+    const q = encodeURIComponent(it.addr);
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${q}&travelmode=driving`;
+
+    // 先打开导航（用户手势内）
+    window.location.href = url;
+
+    // iPhone：跳转后 JS 可能暂停；所以用“短延迟”尽量在跳转前写入
+    items[i].delivered = true;
+    save();
+    render();
+    recolorPins();
+  }
+
+  // ====== 模式切换 ======
+  function showMode(m, silent){
+    mode = m;
+    document.getElementById("tabList").classList.toggle("active", m==="list");
+    document.getElementById("tabMap").classList.toggle("active", m==="map");
+    document.getElementById("list").classList.toggle("hidden", m!=="list");
+    document.getElementById("mapMode").classList.toggle("hidden", m!=="map");
+    if(!silent) save();
+
+    if(m==="map"){
+      ensureSmallMap();
+    }
+  }
+
+  // ====== 地图：小地图 ======
+  function ensureSmallMap(){
+    if(mapSmall) return;
+    mapSmall = L.map('map', { zoomControl: true });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(mapSmall);
+
+    // 默认 Pittsburgh 附近
+    mapSmall.setView([40.4406, -79.9959], 10);
+  }
+
+  function clearMaps(){
+    markersSmall.forEach(m=>m.remove());
+    markersFS.forEach(m=>m.remove());
+    markersSmall = [];
+    markersFS = [];
+  }
+
+  function recolorPins(){
+    // 重新生成最简单：如果你已经生成过地图点，就刷新一遍
+    if(markersSmall.length) genMapPins(true);
+    if(markersFS.length) genMapPins(true, true);
+  }
+
+  // 用 Nominatim（OSM）做地理编码：免费但会慢，200 单请分批
+  async function geocode(addr){
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}&limit=1`;
+    const r = await fetch(url, {headers:{'Accept':'application/json'}});
+    const j = await r.json();
+    if(j && j[0]) return {lat: parseFloat(j[0].lat), lon: parseFloat(j[0].lon)};
+    return null;
+  }
+
+  // ====== 生成地图点（小地图 + 全屏地图共用）=====
+  async function genMapPins(onlyRecolor=false, forFS=false){
+    ensureSmallMap();
+    if(forFS) ensureFSMap();
+
+    // 清旧点
+    if(!onlyRecolor) clearMaps();
+    else{
+      // 仅重染：也清掉再画（最稳定）
+      clearMaps();
     }
 
-    data.push({no, addr, done:false, lat:null, lng:null});
-    idx++;
-  });
-}
+    // 先把有坐标的直接画，没坐标的再逐个查
+    const need = [];
+    for(const it of items){
+      if(it.lat!=null && it.lon!=null) continue;
+      need.push(it);
+    }
 
-function updateStat(){
-  const total = data.length;
-  const done = data.filter(d=>d.done).length;
-  const left = total - done;
+    // 先画已有的
+    drawPins(mapSmall, markersSmall);
+    if(mapFS) drawPins(mapFS, markersFS);
 
-  stat.innerHTML = `
-    <div class="pill">📦 今日共 <b>${total}</b> 单</div>
-    <div class="pill">✅ 已送 <b>${done}</b></div>
-    <div class="pill">🕒 剩余 <b>${left}</b></div>
-  `;
-}
+    if(onlyRecolor){
+      fitIfAny();
+      return;
+    }
 
-function build(){
-  parse();
-  list.innerHTML='';
-
-  data.forEach((d,i)=>{
-    const div=document.createElement('div');
-    div.className='card'+(d.done?' delivered':'');
-    div.innerHTML=`
-      <div class="left">
-        <div class="no">${d.no.replace('NO.','NO.')}</div>
-        <div style="min-width:0">
-          <div class="addr">${d.addr}</div>
-          <div class="sub">点击导航后自动✅；也可手动勾选</div>
-        </div>
-      </div>
-
-      <div class="actions">
-        <input type="checkbox" class="check" ${d.done?'checked':''}
-          onchange="toggle(${i},this.checked)">
-        <button class="navBtn" onclick="nav(${i})">▶ 导航</button>
-      </div>
-    `;
-    list.appendChild(div);
-  });
-
-  updateStat();
-}
-
-function toggle(i,v){
-  data[i].done = v;
-  build();
-}
-
-function nav(i){
-  data[i].done = true;
-  updateStat();
-  window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(data[i].addr)}`);
-  // 回来后列表会保持（因为页面没刷新）
-  build();
-}
-
-function showList(){
-  list.style.display='block';
-  mapwrap.style.display='none';
-}
-
-function showMap(){
-  list.style.display='none';
-  mapwrap.style.display='block';
-  setTimeout(()=>{ if(leafletMap) leafletMap.invalidateSize(); }, 200);
-}
-
-function clearAll(){
-  input.value='';
-  data=[];
-  list.innerHTML='';
-  updateStat();
-  if(leafletMap){
-    markers.forEach(m=>leafletMap.removeLayer(m));
-    markers=[];
+    // 分批查：避免一次太多
+    for(let k=0;k<need.length;k++){
+      const it = need[k];
+      try{
+        const geo = await geocode(it.addr);
+        if(geo){
+          it.lat = geo.lat;
+          it.lon = geo.lon;
+          save();
+          // 查到一个就补一个点
+          drawSingle(it, mapSmall, markersSmall);
+          if(mapFS) drawSingle(it, mapFS, markersFS);
+        }
+      }catch(e){}
+      // 轻微延迟，友好一点
+      await sleep(350);
+    }
+    fitIfAny();
   }
-}
 
-/* 地图：清爽底图（无路名） */
-function ensureMap(){
-  if(leafletMap) return;
+  function drawPins(map, bucket){
+    items.forEach(it=> drawSingle(it, map, bucket));
+  }
 
-  leafletMap = L.map('map', { zoomControl:true }).setView([40.44,-79.99], 11);
+  function drawSingle(it, map, bucket){
+    if(it.lat==null || it.lon==null) return;
 
-  // 更清爽：淡色 + 无路名
-  L.tileLayer(
-    'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
-    { maxZoom: 19 }
-  ).addTo(leafletMap);
-}
+    const color = it.delivered ? "green" : "red";
+    const html = `<div class="pin ${color}">${escapeHtml(it.no)}</div>`;
+    const icon = L.divIcon({className:"", html, iconSize:[46,46], iconAnchor:[23,23]});
 
-function buildMap(){
-  parse();
-  updateStat();
-  ensureMap();
+    const mk = L.marker([it.lat, it.lon], {icon}).addTo(map);
+    mk.on("click", ()=>{
+      // 点图钉：弹一个很简单的卡片（不复杂）
+      const card = `
+        <div style="font-weight:900;margin-bottom:6px;">NO.${escapeHtml(it.no)}</div>
+        <div style="color:#333;margin-bottom:10px;line-height:1.2;">${escapeHtml(it.addr)}</div>
+        <button style="background:#1a73e8;color:#fff;border:0;border-radius:12px;padding:10px 14px;font-weight:900;"
+          onclick="window._navFromMap('${escapeJs(it.no)}')">▶ 导航（自动✅）</button>
+      `;
+      mk.bindPopup(card, {closeButton:true}).openPopup();
+    });
 
-  // 清掉旧点
-  markers.forEach(m=>leafletMap.removeLayer(m));
-  markers=[];
+    bucket.push(mk);
+  }
 
-  // 简单聚焦：先回到匹兹堡附近
-  leafletMap.setView([40.44,-79.99], 11);
+  // 给地图 popup 用：用号码找到对应 item，然后导航并勾选
+  window._navFromMap = function(no){
+    const idx = items.findIndex(x=>x.no===no);
+    if(idx>=0) goNav(idx);
+  }
 
-  data.forEach(d=>{
-    // 通过 Nominatim 定位
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(d.addr)}`)
-      .then(r=>r.json())
-      .then(j=>{
-        if(!j || !j[0]) return;
+  function fitIfAny(){
+    const pts = items.filter(x=>x.lat!=null && x.lon!=null).map(x=>[x.lat,x.lon]);
+    if(!pts.length) return;
+    const b = L.latLngBounds(pts);
+    if(mapSmall) mapSmall.fitBounds(b.pad(0.2));
+    if(mapFS) mapFS.fitBounds(b.pad(0.2));
+  }
 
-        d.lat = parseFloat(j[0].lat);
-        d.lng = parseFloat(j[0].lon);
+  function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
 
-        const icon=L.divIcon({
-          className:'',
-          html:`<div class="marker ${d.done?'done':''}">${d.no.replace('NO.','')}</div>`,
-          iconSize:[44,44],
-          iconAnchor:[22,22]
-        });
+  // ====== 全屏：稳定方案（弹层 + 把地图搬进去）=====
+  function ensureFSMap(){
+    if(mapFS) return;
 
-        const m = L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
+    // 在全屏容器里初始化一张地图
+    mapFS = L.map('mapFSInner', { zoomControl: true });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19
+    }).addTo(mapFS);
 
-        m.on('click',()=>{
-          // 点击点：弹出卡片（更直观）
-          const html = `
-            <div style="min-width:220px">
-              <div style="font-weight:900;font-size:14px;margin-bottom:6px">${d.no}</div>
-              <div style="font-weight:800;font-size:13px;color:#111;line-height:1.3;margin-bottom:10px">${d.addr}</div>
-              <button class="popupBtn" onclick="window.__goNav('${encodeURIComponent(d.addr)}','${d.no}')">▶ 导航（自动✅）</button>
-            </div>
-          `;
-          m.bindPopup(html).openPopup();
-        });
+    mapFS.setView([40.4406, -79.9959], 10);
+  }
 
-        markers.push(m);
-      });
-  });
-}
+  function openFullScreen(){
+    ensureFSMap();
+    document.getElementById("fsMask").classList.add("show");
+    document.getElementById("fsPanel").classList.add("show");
 
-/* 给 popup 按钮用（全局） */
-window.__goNav = (addrEncoded, no)=>{
-  const found = data.find(x => x.no === no);
-  if(found) found.done = true;
-  updateStat();
-  // 重新画点：已送变绿
-  buildMap();
-  window.open(`https://www.google.com/maps/dir/?api=1&destination=${addrEncoded}`);
-};
+    // 关键：弹层显示后再刷新尺寸
+    setTimeout(()=>{
+      mapFS.invalidateSize();
+      // 如果小地图已经有点，把点也生成到全屏图
+      if(markersSmall.length) genMapPins(true, true);
+      fitIfAny();
+    }, 200);
+  }
 
-const fullBtn = document.getElementById('fullBtn');
-fullBtn.onclick = ()=>{
-  isFull = !isFull;
-  document.getElementById('mapwrap').classList.toggle('fullscreenWrap', isFull);
-  document.body.classList.toggle('lock', isFull);
-  fullBtn.innerHTML = isFull ? '✕ 退出全屏' : '⛶ 全屏';
-  setTimeout(()=>{ if(leafletMap) leafletMap.invalidateSize(); }, 250);
-};
+  function closeFullScreen(){
+    document.getElementById("fsMask").classList.remove("show");
+    document.getElementById("fsPanel").classList.remove("show");
+  }
 
-updateStat();
+  // ====== 安全输出 ======
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+  }
+  function escapeJs(s){
+    return String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
+  }
+
+  load();
 </script>
-
 </body>
 </html>
