@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>单点导航</title>
+<title>单点导航（升级版）</title>
 <style>
   body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto;margin:0;padding:12px;background:#f5f5f5}
   h3{margin:6px 0 10px 0}
@@ -33,12 +33,14 @@
 <h3>单点导航（升级版）</h3>
 
 <div class="small">
-  ✅ 自动保存（刷新不丢）｜✅ 已送打勾｜🔍 搜索快速找单
+  ✅ 自动保存（刷新不丢）｜✅ 已送打勾｜🔍 搜索快速找单｜✅ 自动拆“路线号+地址”
 </div>
 
-<textarea id="input" placeholder="每行一单（建议：路线号, 地址）
+<textarea id="input" placeholder="每行一单（你怎么粘都行）
+示例：
 566, 583 Gardenia Dr, Monessen, PA
-565, 6402 Tunnel Hollow Rd, Elizabeth, PA"></textarea>
+676 1128 Chestnut Ridge Dr, Pittsburgh, PA
+677-1228 Chestnut Ridge Dr, Pittsburgh, PA"></textarea>
 
 <div class="row" style="margin-top:10px">
   <button class="primary" onclick="build()">生成列表</button>
@@ -58,26 +60,58 @@
 <div id="list"></div>
 
 <script>
-const LS_TEXT = "routeNav_text_v1";
-const LS_DONE = "routeNav_done_v1";
+const LS_TEXT = "routeNav_text_v2";
+const LS_DONE = "routeNav_done_v2";
 
 let items = [];          // [{id, route, addr, raw}]
 let doneSet = new Set(); // ids delivered
 
-function normalizeLine(line){
-  // 允许： "566, 地址..." 或者只有地址
-  let route = "", addr = line.trim();
-  if(addr.includes(",")){
-    const i = addr.indexOf(",");
-    route = addr.slice(0,i).trim();
-    addr = addr.slice(i+1).trim();
-  }
-  return {route, addr};
+function makeId(raw){
+  return raw;
 }
 
-function makeId(raw){
-  // 以内容做稳定ID：同一行重复也能区分（加序号在 build 时处理）
-  return raw;
+/**
+ * ✅ 自动拆“路线号 + 地址”的核心函数
+ * 支持：
+ * 1) "566, 583 Gardenia Dr, Monessen, PA"        (逗号格式)
+ * 2) "676 1128 Chestnut Ridge Dr, Pittsburgh, PA" (空格格式：前小数字=路线号，后大数字=门牌)
+ * 3) "677-1228 Chestnut Ridge Dr, Pittsburgh, PA" (677-1228)
+ * 4) "677: 1228 Chestnut Ridge Dr, Pittsburgh, PA" (677: 1228)
+ * 5) "1128 Chestnut Ridge Dr, Pittsburgh, PA"     (只有地址)
+ */
+function normalizeLine(line){
+  let raw = (line || "").trim();
+  raw = raw.replace(/\s+/g, " "); // 合并多余空格
+
+  let route = "";
+  let addr = raw;
+
+  // A) 有逗号：优先按第一个逗号拆（最稳定）
+  if(raw.includes(",")){
+    const i = raw.indexOf(",");
+    route = raw.slice(0,i).trim();
+    addr  = raw.slice(i+1).trim();
+    return {route, addr};
+  }
+
+  // B) "676 1128 Chestnut..."：2-4位路线号 + 空格 + 3-6位门牌号...
+  const m = raw.match(/^(\d{2,4})\s+(\d{3,6}\b.*)$/);
+  if(m){
+    route = m[1].trim();
+    addr  = m[2].trim();
+    return {route, addr};
+  }
+
+  // C) "676-1128 ..." 或 "676: 1128 ..." 或 "676#1128 ..."
+  const m2 = raw.match(/^(\d{2,4})\s*[-:#]\s*(\d{3,6}\b.*)$/);
+  if(m2){
+    route = m2[1].trim();
+    addr  = m2[2].trim();
+    return {route, addr};
+  }
+
+  // D) 只有地址
+  return {route, addr};
 }
 
 function saveText(){
@@ -102,7 +136,7 @@ function build(){
   const lines = (document.getElementById("input").value || "")
     .split(/\n+/).map(x=>x.trim()).filter(Boolean);
 
-  // 构建 items；处理完全相同的行：加 #1 #2 让每条都能单独标记已送
+  // 同一行重复也能单独标记已送：加 #2 #3
   const counter = new Map();
   items = lines.map(raw=>{
     const {route, addr} = normalizeLine(raw);
@@ -142,6 +176,8 @@ function render(){
 
   for(const it of filtered){
     const isDone = doneSet.has(it.id);
+
+    // ✅ 只把“地址部分”送去 Google Maps，避免路线号干扰
     const url = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(it.addr);
 
     const card = document.createElement("div");
@@ -149,7 +185,7 @@ function render(){
     card.innerHTML = `
       <div class="left">
         <div class="addr">
-          ${it.route ? `<span class="route">${escapeHtml(it.route)}</span>` : ""}
+          ${it.route ? `<span class="route">#${escapeHtml(it.route)}</span>` : ""}
           ${escapeHtml(it.addr)}
         </div>
       </div>
