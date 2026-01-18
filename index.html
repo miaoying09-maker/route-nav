@@ -9,70 +9,108 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
-body{
-  font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto;
-  margin:0;padding:12px;background:#f6f7f9
-}
-h2{margin:6px 0 10px}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto;
+    margin:0;padding:12px;background:#f6f7f9
+  }
+  h2{margin:6px 0 10px;font-size:28px}
 
-textarea{
-  width:100%;height:160px;border-radius:12px;border:1px solid #ddd;
-  padding:10px;font-size:14px;box-sizing:border-box
-}
+  textarea{
+    width:100%;height:160px;border-radius:14px;border:1px solid #ddd;
+    padding:12px;font-size:14px;box-sizing:border-box;background:#fff
+  }
 
-button{
-  border:0;border-radius:12px;
-  padding:10px 14px;font-size:15px;font-weight:600
-}
+  button{
+    border:0;border-radius:14px;
+    padding:12px 16px;font-size:16px;font-weight:700
+  }
+  .primary{background:#1677ff;color:#fff}
+  .ghost{background:#fff;border:1px solid #ddd;color:#1677ff}
 
-.primary{background:#1677ff;color:#fff}
-.ghost{background:#fff;border:1px solid #ddd}
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+  .tabs{display:flex;gap:10px;margin:10px 0}
 
-.row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
-.card{
-  background:#fff;border-radius:14px;padding:12px;margin-top:10px;
-  display:flex;justify-content:space-between;align-items:center
-}
-.badge{
-  background:#eee;border-radius:999px;padding:4px 10px;
-  font-weight:700;font-size:12px;margin-right:6px
-}
-.addr{font-size:14px;line-height:1.3}
-.actions{display:flex;gap:8px;align-items:center}
-.check{width:22px;height:22px}
-.small{font-size:12px;color:#666;margin-top:6px}
+  #stat{
+    margin-top:8px;font-size:16px;color:#333;
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap
+  }
+  #stat b{font-size:18px}
+  .pill{
+    background:#fff;border:1px solid #e6e6e6;border-radius:999px;
+    padding:8px 12px;display:inline-flex;gap:10px;align-items:center
+  }
 
-.tabs{display:flex;gap:10px;margin:10px 0}
-.tabs button{padding:8px 12px}
+  /* 列表卡片 */
+  .card{
+    background:#fff;border-radius:16px;padding:12px;margin-top:12px;
+    display:flex;gap:12px;align-items:center;justify-content:space-between
+  }
+  .left{
+    display:flex;gap:12px;align-items:flex-start;min-width:0
+  }
+  .no{
+    flex:0 0 auto;
+    background:#1677ff;color:#fff;border-radius:14px;
+    padding:10px 12px;
+    font-weight:900;font-size:16px;line-height:1;
+    box-shadow:0 6px 14px rgba(22,119,255,.25)
+  }
+  .addr{
+    font-size:15px;line-height:1.3;word-break:break-word;
+    font-weight:700;color:#111
+  }
+  .sub{
+    margin-top:4px;font-size:12px;color:#666;font-weight:600
+  }
+  .actions{display:flex;gap:10px;align-items:center;flex:0 0 auto}
+  .check{width:22px;height:22px;transform:scale(1.15)}
+  .navBtn{
+    background:#1677ff;color:#fff;border-radius:14px;
+    padding:12px 14px;font-weight:900
+  }
+  .delivered{opacity:.5}
+  .small{font-size:12px;color:#666;margin-top:8px}
 
-#list{display:block}
-#mapwrap{display:none;position:relative}
-#map{
-  height:65vh;min-height:520px;border-radius:14px;margin-top:10px
-}
+  /* 地图 */
+  #list{display:block}
+  #mapwrap{display:none;position:relative;margin-top:10px}
+  #map{
+    height:60vh;min-height:520px;border-radius:16px;overflow:hidden
+  }
 
-/* 全屏 */
-.fullbtn{
-  position:absolute;right:14px;top:14px;z-index:9999;
-  background:#111;color:#fff;border-radius:12px;
-  padding:10px 12px;font-weight:900
-}
-.fullscreen{
-  position:fixed!important;
-  left:0;top:0;right:0;bottom:0;
-  width:100vw!important;height:100vh!important;
-  border-radius:0!important;z-index:99999!important
-}
-body.lock{overflow:hidden}
+  /* 伪全屏（iPhone Safari 稳定） */
+  #mapwrap.fullscreenWrap{
+    position:fixed;left:0;top:0;right:0;bottom:0;
+    background:#fff;z-index:999999;padding:10px
+  }
+  #mapwrap.fullscreenWrap #map{
+    height:calc(100vh - 70px);
+    min-height:auto;border-radius:16px
+  }
+  body.lock{overflow:hidden}
 
-/* 地图标签 */
-.marker{
-  background:#111;color:#fff;border-radius:999px;
-  width:38px;height:38px;
-  display:flex;align-items:center;justify-content:center;
-  font-weight:800;border:3px solid #fff
-}
-.marker.done{background:#1bbf5c}
+  .fullbtn{
+    position:absolute;right:16px;top:16px;z-index:9999;
+    background:#111;color:#fff;border-radius:999px;
+    padding:12px 14px;font-weight:900;display:flex;align-items:center;gap:8px
+  }
+
+  /* 地图标记：路线号更清晰 */
+  .marker{
+    background:#111;color:#fff;border-radius:999px;
+    width:44px;height:44px;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:900;border:4px solid #fff;
+    box-shadow:0 10px 20px rgba(0,0,0,.2)
+  }
+  .marker.done{background:#1bbf5c}
+
+  /* 地图弹窗按钮更居中 */
+  .popupBtn{
+    width:100%;
+    background:#1677ff;color:#fff;border-radius:14px;
+    padding:12px 14px;font-weight:900;border:0
+  }
 </style>
 </head>
 
@@ -80,7 +118,7 @@ body.lock{overflow:hidden}
 
 <h2>单点导航（升级版）</h2>
 
-<textarea id="input" placeholder="每行一单（可带路线号）
+<textarea id="input" placeholder="每行一单（推荐：路线号 空格 地址）
 802 902 Wilhelm St, Pittsburgh, PA
 803 900 Marena St, Pittsburgh, PA"></textarea>
 
@@ -94,70 +132,93 @@ body.lock{overflow:hidden}
   <button class="ghost" onclick="showMap()">地图模式</button>
 </div>
 
-<div id="stat" class="small"></div>
+<div id="stat"></div>
 
 <div id="list"></div>
 
 <div id="mapwrap">
   <button class="fullbtn" id="fullBtn">⛶ 全屏</button>
-  <button class="primary" onclick="buildMap()">生成地图点</button>
+  <div class="row">
+    <button class="primary" onclick="buildMap()">生成地图点</button>
+  </div>
   <div id="map"></div>
-  <div class="small">点路线号 → 导航 → 自动打勾 ✅</div>
+  <div class="small">地图更清爽（无路名）。点路线号 → 导航 → 自动打勾 ✅</div>
 </div>
 
 <script>
-let data=[],map,markers=[],isFull=false;
+let data=[], leafletMap=null, markers=[], isFull=false;
 
 function parse(){
   data=[];
-  const lines=input.value.split(/\n/).map(l=>l.trim()).filter(Boolean);
+  const lines = input.value.split(/\n/).map(l=>l.trim()).filter(Boolean);
   let idx=1;
   lines.forEach(l=>{
+    // 支持：802 902 Wilhelm... 或 802, 902 Wilhelm...
     let no=`NO.${idx}`;
     let addr=l;
-    const m=l.match(/^(\d+)\s+(.*)$/);
-    if(m){no=`NO.${m[1]}`;addr=m[2]}
-    data.push({no,addr,done:false,lat:null,lng:null});
+
+    const m = l.match(/^(\d+)[,\s]+(.+)$/);
+    if(m){
+      no = `NO.${m[1]}`;
+      addr = m[2].trim();
+    }
+
+    data.push({no, addr, done:false, lat:null, lng:null});
     idx++;
   });
 }
 
 function updateStat(){
-  const total=data.length;
-  const done=data.filter(d=>d.done).length;
-  stat.innerHTML=`📦 今日共 <b>${total}</b> 单 ｜ 已送 ${done} ｜ 剩余 ${total-done}`;
+  const total = data.length;
+  const done = data.filter(d=>d.done).length;
+  const left = total - done;
+
+  stat.innerHTML = `
+    <div class="pill">📦 今日共 <b>${total}</b> 单</div>
+    <div class="pill">✅ 已送 <b>${done}</b></div>
+    <div class="pill">🕒 剩余 <b>${left}</b></div>
+  `;
 }
 
 function build(){
   parse();
   list.innerHTML='';
+
   data.forEach((d,i)=>{
     const div=document.createElement('div');
     div.className='card'+(d.done?' delivered':'');
     div.innerHTML=`
-      <div>
-        <span class="badge">${d.no}</span>
-        <div class="addr">${d.addr}</div>
+      <div class="left">
+        <div class="no">${d.no.replace('NO.','NO.')}</div>
+        <div style="min-width:0">
+          <div class="addr">${d.addr}</div>
+          <div class="sub">点击导航后自动✅；也可手动勾选</div>
+        </div>
       </div>
+
       <div class="actions">
         <input type="checkbox" class="check" ${d.done?'checked':''}
           onchange="toggle(${i},this.checked)">
-        <button class="primary" onclick="nav(${i})">▶ 导航</button>
-      </div>`;
+        <button class="navBtn" onclick="nav(${i})">▶ 导航</button>
+      </div>
+    `;
     list.appendChild(div);
   });
+
   updateStat();
 }
 
 function toggle(i,v){
-  data[i].done=v;
+  data[i].done = v;
   build();
 }
 
 function nav(i){
-  data[i].done=true;
+  data[i].done = true;
   updateStat();
   window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(data[i].addr)}`);
+  // 回来后列表会保持（因为页面没刷新）
+  build();
 }
 
 function showList(){
@@ -168,52 +229,98 @@ function showList(){
 function showMap(){
   list.style.display='none';
   mapwrap.style.display='block';
-  if(map) map.invalidateSize();
+  setTimeout(()=>{ if(leafletMap) leafletMap.invalidateSize(); }, 200);
 }
 
 function clearAll(){
   input.value='';
-  data=[];list.innerHTML='';
+  data=[];
+  list.innerHTML='';
   updateStat();
+  if(leafletMap){
+    markers.forEach(m=>leafletMap.removeLayer(m));
+    markers=[];
+  }
+}
+
+/* 地图：清爽底图（无路名） */
+function ensureMap(){
+  if(leafletMap) return;
+
+  leafletMap = L.map('map', { zoomControl:true }).setView([40.44,-79.99], 11);
+
+  // 更清爽：淡色 + 无路名
+  L.tileLayer(
+    'https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png',
+    { maxZoom: 19 }
+  ).addTo(leafletMap);
 }
 
 function buildMap(){
-  if(!map){
-    map=L.map('map').setView([40.44,-79.99],11);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-  }
-  markers.forEach(m=>map.removeLayer(m));
+  parse();
+  updateStat();
+  ensureMap();
+
+  // 清掉旧点
+  markers.forEach(m=>leafletMap.removeLayer(m));
   markers=[];
 
+  // 简单聚焦：先回到匹兹堡附近
+  leafletMap.setView([40.44,-79.99], 11);
+
   data.forEach(d=>{
-    fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(d.addr)}`)
-      .then(r=>r.json()).then(j=>{
-        if(!j[0])return;
-        d.lat=j[0].lat;d.lng=j[0].lon;
+    // 通过 Nominatim 定位
+    fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(d.addr)}`)
+      .then(r=>r.json())
+      .then(j=>{
+        if(!j || !j[0]) return;
+
+        d.lat = parseFloat(j[0].lat);
+        d.lng = parseFloat(j[0].lon);
+
         const icon=L.divIcon({
           className:'',
           html:`<div class="marker ${d.done?'done':''}">${d.no.replace('NO.','')}</div>`,
-          iconSize:[38,38],iconAnchor:[19,19]
+          iconSize:[44,44],
+          iconAnchor:[22,22]
         });
-        const m=L.marker([d.lat,d.lng],{icon}).addTo(map);
+
+        const m = L.marker([d.lat,d.lng],{icon}).addTo(leafletMap);
+
         m.on('click',()=>{
-          d.done=true;
-          updateStat();
-          window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(d.addr)}`);
-          buildMap();
+          // 点击点：弹出卡片（更直观）
+          const html = `
+            <div style="min-width:220px">
+              <div style="font-weight:900;font-size:14px;margin-bottom:6px">${d.no}</div>
+              <div style="font-weight:800;font-size:13px;color:#111;line-height:1.3;margin-bottom:10px">${d.addr}</div>
+              <button class="popupBtn" onclick="window.__goNav('${encodeURIComponent(d.addr)}','${d.no}')">▶ 导航（自动✅）</button>
+            </div>
+          `;
+          m.bindPopup(html).openPopup();
         });
+
         markers.push(m);
       });
   });
 }
 
-/* 全屏控制 */
-fullBtn.onclick=()=>{
-  isFull=!isFull;
-  map.classList.toggle('fullscreen',isFull);
-  document.body.classList.toggle('lock',isFull);
-  fullBtn.textContent=isFull?'✕ 退出':'⛶ 全屏';
-  setTimeout(()=>{if(map)map.invalidateSize()},200);
+/* 给 popup 按钮用（全局） */
+window.__goNav = (addrEncoded, no)=>{
+  const found = data.find(x => x.no === no);
+  if(found) found.done = true;
+  updateStat();
+  // 重新画点：已送变绿
+  buildMap();
+  window.open(`https://www.google.com/maps/dir/?api=1&destination=${addrEncoded}`);
+};
+
+const fullBtn = document.getElementById('fullBtn');
+fullBtn.onclick = ()=>{
+  isFull = !isFull;
+  document.getElementById('mapwrap').classList.toggle('fullscreenWrap', isFull);
+  document.body.classList.toggle('lock', isFull);
+  fullBtn.innerHTML = isFull ? '✕ 退出全屏' : '⛶ 全屏';
+  setTimeout(()=>{ if(leafletMap) leafletMap.invalidateSize(); }, 250);
 };
 
 updateStat();
