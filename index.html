@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>单点导航（纯列表最终版）</title>
+<title>单点导航（纯列表最终版 + OCR）</title>
 
-<!-- OCR：浏览器本地识别 -->
+<!-- OCR：浏览器本地识别（第一次加载会慢一点） -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <style>
   :root{
     --bg:#f6f7f9; --card:#fff; --line:#e8e8ee;
     --blue:#1a73e8; --dark:#111; --muted:#666;
-    --green:#1bbf5c; --red:#c62828;
+    --red:#c62828;
   }
   *{box-sizing:border-box}
   body{
@@ -22,20 +22,22 @@
   }
   .wrap{max-width:820px;margin:0 auto;padding:12px}
   h2{margin:10px 0 12px;font-size:26px}
+
   textarea{
     width:100%;height:165px;border-radius:14px;border:1px solid var(--line);
     padding:12px;font-size:14px;line-height:1.35;background:#fff;
   }
+
   .row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;align-items:center}
   button{
     border:0;border-radius:14px;padding:12px 16px;font-size:16px;font-weight:900;
-    cursor:pointer;
-    -webkit-tap-highlight-color: transparent;
+    cursor:pointer;-webkit-tap-highlight-color:transparent;
   }
   button:active{transform:scale(.99)}
   .primary{background:var(--blue);color:#fff}
   .ghost{background:#fff;border:1px solid var(--line);color:#111}
-  .danger{background:#fff;border:1px solid #ffd1d1;color:#c62828}
+  .danger{background:#fff;border:1px solid #ffd1d1;color:var(--red)}
+
   .stat{
     background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;
     font-size:16px;font-weight:1000;display:flex;gap:12px;flex-wrap:wrap;align-items:center
@@ -70,9 +72,8 @@
   .navbtn{background:var(--blue);color:#fff;border-radius:14px;padding:12px 14px;font-weight:1000}
   .delivered{opacity:.45}
 
-  .small{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.4}
   .hint{
-    margin-top:8px;padding:10px 12px;background:#fff;border:1px dashed var(--line);
+    margin-top:10px;padding:10px 12px;background:#fff;border:1px dashed var(--line);
     border-radius:14px;font-size:12px;color:#444;line-height:1.45
   }
 
@@ -82,19 +83,19 @@
     font-size:13px;color:#333;display:none;
   }
   .progress.show{display:block}
-  .bar{
-    margin-top:8px;height:10px;border-radius:999px;background:#eee;overflow:hidden;
-  }
+  .bar{margin-top:8px;height:10px;border-radius:999px;background:#eee;overflow:hidden}
   .bar > div{
     height:100%;width:0%;background:var(--blue);border-radius:999px;
     transition:width .2s;
   }
+
+  .small{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.4}
 </style>
 </head>
 
 <body>
 <div class="wrap">
-  <h2>单点导航（纯列表最终版）</h2>
+  <h2>单点导航（纯列表最终版 + OCR）</h2>
 
   <textarea id="input" placeholder="每行一单（路线号 空格 地址）
 例如：
@@ -103,17 +104,19 @@
 
   <div class="row">
     <button class="primary" id="btnBuild">生成列表</button>
-    <button class="ghost" id="btnOCR">📷 识别截图</button>
+    <button class="ghost" id="btnOCR">📷 识别截图（最多9张）</button>
     <button class="ghost" id="btnPaste">📋 从剪贴板粘贴</button>
     <button class="ghost" id="btnCopyAll">复制（带线路号）</button>
     <button class="ghost" id="btnCopyAddr">只复制地址</button>
     <button class="danger" id="btnClear">清空今天</button>
-    <input id="imgPick" type="file" accept="image/*" style="display:none" />
+
+    <!-- ✅ 多选 + ✅ 9张上限在JS里控制 -->
+    <input id="imgPick" type="file" accept="image/*" multiple style="display:none" />
   </div>
 
   <div class="stat" id="stat">📦 今日共 0 单 ｜ ✅ 已送 0 ｜ 🕒 剩余 0</div>
 
-  <div class="sortbar" id="sortbar">
+  <div class="sortbar">
     <button class="sortbtn on" id="sortAsc">🔼 线路号升序</button>
     <button class="sortbtn" id="sortDesc">🔽 线路号降序</button>
   </div>
@@ -130,7 +133,8 @@
   <div class="hint">
     ✅ 点“导航”会自动勾选已送。<br/>
     🔁 每天线路号不同没关系：系统按“今天日期”单独保存输入与已送记录。<br/>
-    📷 OCR 建议：截图越清晰越好；地址最好包含城市/州（Pittsburgh, PA）。
+    📷 OCR 建议：截图越清晰越好；地址尽量包含城市/州（Pittsburgh, PA）。<br/>
+    ⚠️ 选择图片超过 9 张会提示你分批。
   </div>
 
   <div class="small">
@@ -139,20 +143,25 @@
 </div>
 
 <script>
+/* ===================== 工具 ===================== */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+}
+
 /* ===================== 今日存储（每天独立） ===================== */
 function todayKey(){
   const d=new Date();
   const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
 }
-const K_INPUT = "rn_list:input:"+todayKey();
-const K_DONE  = "rn_list:done:"+todayKey();
-const K_SORT  = "rn_list:sort";
+const K_INPUT = "rn_list_ocr:input:"+todayKey();
+const K_DONE  = "rn_list_ocr:done:"+todayKey();
+const K_SORT  = "rn_list_ocr:sort";
 
-/* doneSet 存的是： id = noStr + "||" + addr */
 let doneSet = new Set(JSON.parse(localStorage.getItem(K_DONE) || "[]"));
 let sortMode = localStorage.getItem(K_SORT) || "asc"; // asc / desc
-
 let orders = []; // {id,noStr,noNum,addr,done}
 
 /* ===================== DOM ===================== */
@@ -173,7 +182,6 @@ document.getElementById('btnPaste').addEventListener('click', pasteFromClipboard
 
 document.getElementById('sortAsc').addEventListener('click', ()=>setSort("asc"));
 document.getElementById('sortDesc').addEventListener('click', ()=>setSort("desc"));
-
 elSearch.addEventListener('input', renderList);
 
 /* OCR */
@@ -192,12 +200,10 @@ function parseLines(text){
   const out = [];
   let auto = 1;
   for(const line of lines){
-    // 支持：NO.676 / 676, / 676 空格
     const m = line.match(/^(?:NO\.?\s*)?(\d{1,6})[,\s，]+(.+)$/i);
     if(m){
       out.push({noStr: m[1], noNum: parseInt(m[1],10), addr: m[2].trim()});
     }else{
-      // 没有数字号：给 A001（排最后）
       const noStr = "A"+String(auto++).padStart(3,'0');
       out.push({noStr, noNum: Number.MAX_SAFE_INTEGER - 10000 + auto, addr: line});
     }
@@ -215,27 +221,16 @@ function setSort(mode){
 }
 function sortOrders(arr){
   const a = arr.slice();
-  a.sort((x,y)=>{
-    if(sortMode==="asc") return x.noNum - y.noNum;
-    return y.noNum - x.noNum;
-  });
+  a.sort((x,y)=> sortMode==="asc" ? (x.noNum - y.noNum) : (y.noNum - x.noNum));
   return a;
 }
 
 /* ===================== 构建列表 ===================== */
 function buildList(){
   const parsed = parseLines(elInput.value || "");
-  const old = new Map(orders.map(o=>[o.id,o]));
-
   orders = parsed.map(p=>{
     const id = p.noStr + "||" + p.addr;
-    return {
-      id,
-      noStr: p.noStr,
-      noNum: p.noNum,
-      addr: p.addr,
-      done: doneSet.has(id),
-    };
+    return { id, noStr:p.noStr, noNum:p.noNum, addr:p.addr, done: doneSet.has(id) };
   });
 
   // 去重（同号同地址重复时只保留一次）
@@ -246,7 +241,11 @@ function buildList(){
     return true;
   });
 
-  saveDone(); // 确保本地结构正常
+  // 清理 doneSet（避免换了输入还保留旧的）
+  const idSet = new Set(orders.map(o=>o.id));
+  doneSet = new Set([...doneSet].filter(id=>idSet.has(id)));
+  saveDone();
+
   renderAll();
 }
 
@@ -284,7 +283,6 @@ function renderList(){
       </div>
     `;
 
-    // 勾选
     card.querySelector('input').addEventListener('change', (e)=>{
       o.done = e.target.checked;
       if(o.done) doneSet.add(o.id);
@@ -293,7 +291,6 @@ function renderList(){
       renderAll();
     });
 
-    // 导航
     card.querySelector('.navbtn').addEventListener('click', ()=>{
       startNav(o);
     });
@@ -314,9 +311,8 @@ function saveDone(){
   localStorage.setItem(K_DONE, JSON.stringify([...doneSet]));
 }
 
-/* ===================== 导航：Google Maps（iPhone/安卓都稳） ===================== */
+/* ===================== 导航：Google Maps ===================== */
 function startNav(o){
-  // 自动✅
   if(!o.done){
     o.done = true;
     doneSet.add(o.id);
@@ -327,13 +323,12 @@ function startNav(o){
   window.location.href = url;
 }
 
-/* ===================== 复制（带号/不带号） ===================== */
+/* ===================== 复制 ===================== */
 function makeCopyText(withNo){
   const view = sortOrders(orders);
-  if(withNo){
-    return view.map(o=>`${o.noStr} ${o.addr}`).join("\n");
-  }
-  return view.map(o=>o.addr).join("\n");
+  return withNo
+    ? view.map(o=>`${o.noStr} ${o.addr}`).join("\n")
+    : view.map(o=>o.addr).join("\n");
 }
 
 async function copyText(txt){
@@ -341,7 +336,6 @@ async function copyText(txt){
     await navigator.clipboard.writeText(txt);
     alert("已复制 ✅");
   }catch(e){
-    // 兼容旧浏览器
     const ta = document.createElement('textarea');
     ta.value = txt;
     document.body.appendChild(ta);
@@ -364,7 +358,7 @@ function clearToday(){
   renderAll();
 }
 
-/* ===================== 从剪贴板粘贴（可选） ===================== */
+/* ===================== 从剪贴板粘贴 ===================== */
 async function pasteFromClipboard(){
   try{
     const t = await navigator.clipboard.readText();
@@ -377,59 +371,11 @@ async function pasteFromClipboard(){
     elInput.dispatchEvent(new Event('input'));
     alert("已粘贴 ✅ 你可以点「生成列表」");
   }catch(e){
-    alert("无法读取剪贴板：请在 Safari/Chrome 里允许剪贴板权限，或手动粘贴到输入框。");
+    alert("无法读取剪贴板：请允许剪贴板权限，或手动粘贴到输入框。");
   }
 }
 
-/* ===================== OCR：从截图识别线路号+地址 ===================== */
-async function onPickImage(e){
-  const file = e.target.files && e.target.files[0];
-  if(!file) return;
-
-  showOCRProgress(true, "开始识别…第一次会慢一点，请别退出页面", 1);
-
-  try{
-    const imgURL = URL.createObjectURL(file);
-
-    const { data } = await Tesseract.recognize(imgURL, 'eng', {
-      logger: m => {
-        if(m && m.status){
-          const p = typeof m.progress === "number" ? m.progress : 0;
-          const pct = Math.max(0, Math.min(1, p));
-          showOCRProgress(true, `${m.status}…`, pct);
-        }
-      }
-    });
-
-    URL.revokeObjectURL(imgURL);
-
-    const raw = (data && data.text) ? data.text : "";
-    const cleaned = normalizeOcrText(raw);
-    const lines = extractRouteAddrLines(cleaned);
-
-    if(!lines.length){
-      showOCRProgress(false);
-      alert("没识别出有效的『线路号 + 地址』。\n建议：截图更清晰、放大一点、避免太多空白。");
-      return;
-    }
-
-    // 写入输入框（追加）
-    const prev = (elInput.value || "").trim();
-    const next = lines.join("\n");
-    elInput.value = prev ? (prev + "\n" + next) : next;
-    elInput.dispatchEvent(new Event('input'));
-
-    showOCRProgress(false);
-    alert(`识别完成 ✅ 共提取 ${lines.length} 条\n现在点「生成列表」即可`);
-  }catch(err){
-    console.error(err);
-    showOCRProgress(false);
-    alert("识别失败：可能网络慢/图片太大/浏览器限制。\n你可以换一张更清晰的截图再试。");
-  }finally{
-    e.target.value = ""; // 允许重复选同一张
-  }
-}
-
+/* ===================== OCR ===================== */
 function showOCRProgress(on, text, progress01){
   if(!on){
     elOCRBox.classList.remove('show');
@@ -458,7 +404,6 @@ function extractRouteAddrLines(text){
   const out = [];
   const lines = text.split("\n").map(s=>s.trim()).filter(Boolean);
 
-  // 676 1128 Chestnut Ridge Dr, Pittsburgh, PA
   const re = /^(?:NO\.?\s*)?(\d{2,6})\s+(.+?)$/i;
 
   for(const line of lines){
@@ -470,25 +415,95 @@ function extractRouteAddrLines(text){
     const no = m[1];
     let addr = m[2].trim();
 
-    // 地址判定：要像“地址”
     const looksLikeAddr =
       /\d/.test(addr) &&
-      /(St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Pike|Ct|Cir|Way|Pl|Ter|Terrace|Ste|Apt|Unit|PA|Pittsburgh|Crafton|McKees|Rocks|Rosslyn)/i.test(addr);
+      /(St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Pike|Ct|Cir|Way|Pl|Ter|Terrace|Ste|Apt|Unit|PA|Pittsburgh|Crafton|McKees|Rocks|Rosslyn|Bridgeville|Coraopolis)/i.test(addr);
 
     if(!looksLikeAddr) continue;
 
     addr = addr.replace(/\s*,\s*/g, ", ").replace(/[ ]{2,}/g, " ");
-
     out.push(`${no} ${addr}`);
   }
 
-  // 去重
   return [...new Set(out)];
 }
 
-/* ===================== 安全输出 ===================== */
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+/* ✅ 多选OCR：最多9张 + 限速稳住 */
+async function onPickImage(e){
+  const files = Array.from(e.target.files || []);
+  if(!files.length) return;
+
+  // ====== 9 张上限（硬限制）======
+  if(files.length > 9){
+    alert(`你选择了 ${files.length} 张图片。\n为保证稳定性，每次最多识别 9 张。\n请分两次选择。`);
+    e.target.value = "";
+    return;
+  }
+
+  showOCRProgress(true, `开始识别 ${files.length} 张图片…`, 0);
+
+  let allLines = [];
+  let idx = 0;
+
+  try{
+    for(const file of files){
+      idx++;
+      showOCRProgress(true, `识别第 ${idx}/${files.length} 张…`, (idx-1)/files.length);
+
+      const imgURL = URL.createObjectURL(file);
+
+      const { data } = await Tesseract.recognize(imgURL, 'eng', {
+        logger: m => {
+          if(m && typeof m.progress === "number"){
+            const base = (idx-1)/files.length;
+            const pct = base + (m.progress / files.length);
+            showOCRProgress(true, `识别第 ${idx}/${files.length} 张…`, pct);
+          }
+        }
+      });
+
+      URL.revokeObjectURL(imgURL);
+
+      const raw = data && data.text ? data.text : "";
+      const cleaned = normalizeOcrText(raw);
+      const lines = extractRouteAddrLines(cleaned);
+      allLines.push(...lines);
+
+      // 关键：给浏览器喘息时间，9张更稳
+      await sleep(400);
+    }
+
+    // 去重（保持顺序）
+    const uniq = [];
+    const seen = new Set();
+    for(const l of allLines){
+      if(!seen.has(l)){
+        seen.add(l);
+        uniq.push(l);
+      }
+    }
+
+    if(!uniq.length){
+      showOCRProgress(false);
+      alert("没有识别出有效的『线路号 + 地址』。\n建议截图更清晰、字号更大。");
+      return;
+    }
+
+    // 追加到输入框
+    const prev = (elInput.value || "").trim();
+    const next = uniq.join("\n");
+    elInput.value = prev ? (prev + "\n" + next) : next;
+    elInput.dispatchEvent(new Event('input'));
+
+    showOCRProgress(false);
+    alert(`识别完成 ✅\n共 ${files.length} 张图片\n提取 ${uniq.length} 条地址\n现在点「生成列表」即可`);
+  }catch(err){
+    console.error(err);
+    showOCRProgress(false);
+    alert("OCR 过程中出错：可能网络慢或图片过大。\n建议分批识别。");
+  }finally{
+    e.target.value = "";
+  }
 }
 
 /* ===================== 初始化 ===================== */
