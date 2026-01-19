@@ -1,103 +1,520 @@
 <!doctype html>
 <html lang="zh">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>单点导航（纯列表最终版 + OCR）</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>单点导航（纯列表最终版 + OCR）</title>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <!-- OCR 引擎：Tesseract.js -->
+  <script src="https://unpkg.com/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 
-<style>
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI";background:#f6f7f9;margin:0}
-.wrap{max-width:820px;margin:auto;padding:12px}
-h2{font-size:26px}
-textarea{width:100%;height:140px;border-radius:14px;border:1px solid #ddd;padding:12px}
-button{border:0;border-radius:14px;padding:12px 16px;font-size:16px;font-weight:800;margin:6px}
-.primary{background:#1a73e8;color:#fff}
-.ghost{background:#fff;border:1px solid #ddd}
-.card{background:#fff;border-radius:18px;padding:14px;margin-top:10px;display:flex;justify-content:space-between;align-items:center}
-.no{background:#000;color:#fff;border-radius:12px;padding:10px 14px;font-weight:900}
-.addr{font-weight:800}
-</style>
+  <style>
+    :root{
+      --bg:#f6f7f9; --card:#fff; --line:#e8e8ee;
+      --blue:#1a73e8; --dark:#111; --muted:#666;
+      --green:#1bbf5c;
+    }
+    body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial}
+    .wrap{max-width:860px;margin:0 auto;padding:12px}
+    h2{margin:8px 0 10px;font-size:26px}
+    textarea{
+      width:100%;height:160px;box-sizing:border-box;border-radius:14px;border:1px solid var(--line);
+      padding:12px;font-size:14px;line-height:1.35;background:#fff
+    }
+    .row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;align-items:center}
+    button{border:0;border-radius:14px;padding:12px 16px;font-size:16px;font-weight:900}
+    .primary{background:var(--blue);color:#fff}
+    .ghost{background:#fff;border:1px solid var(--line);color:#111}
+    .danger{background:#fff;border:1px solid #ffb3b3;color:#c62828}
+    .stat{
+      background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;
+      font-size:16px;font-weight:1000;display:flex;gap:12px;flex-wrap:wrap;align-items:center
+    }
+    .sortbar{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+    .sortbtn{background:#fff;border:1px solid var(--line);color:#111}
+    .sortbtn.on{background:var(--blue);border-color:var(--blue);color:#fff}
+    .search{
+      width:100%;box-sizing:border-box;margin-top:10px;
+      border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:14px;background:#fff
+    }
+    .list{margin-top:10px}
+    .card{
+      background:var(--card);border:1px solid var(--line);border-radius:18px;
+      padding:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;
+      margin-top:10px;
+    }
+    .left{min-width:0;display:flex;gap:12px;align-items:flex-start}
+    .no{
+      background:var(--dark);color:#fff;border-radius:14px;padding:10px 12px;
+      font-weight:1100;font-size:16px;line-height:1;
+      flex:0 0 auto
+    }
+    .addr{font-size:15px;font-weight:1000;line-height:1.25;word-break:break-word}
+    .sub{font-size:12px;color:var(--muted);margin-top:4px;font-weight:700}
+    .actions{display:flex;gap:10px;align-items:center;flex:0 0 auto}
+    .chk{width:22px;height:22px;transform:scale(1.15)}
+    .navbtn{background:var(--blue);color:#fff;border-radius:14px;padding:12px 14px;font-weight:1100}
+    .delivered{opacity:.45}
+
+    .small{font-size:12px;color:var(--muted);margin-top:10px;line-height:1.35}
+    .hint{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-top:10px}
+    .progress{font-weight:900;color:#111}
+    .fileHidden{display:none}
+  </style>
 </head>
 
 <body>
 <div class="wrap">
-<h2>单点导航（A 方案 · 稳定版）</h2>
+  <h2>单点导航（纯列表最终版 + OCR）</h2>
 
-<textarea id="input" placeholder="这里会自动填充 OCR 结果，也可以手动粘贴"></textarea>
+  <textarea id="input" placeholder="方式1：每行一单（路线号 空格 地址）
+例：
+804 1040 ELKTON ST, Pittsburgh, PA
+805 516 Lorenz Ave, Pittsburgh, PA
 
-<br>
-<input type="file" id="imgs" accept="image/*" multiple>
+方式2：点【识别截图】上传截图（最多9张），自动提取“路线号+地址”"></textarea>
 
-<br>
-<button class="primary" onclick="runOCR()">📷 识别截图（最多 9 张）</button>
-<button class="ghost" onclick="build()">生成列表</button>
-<button class="ghost" onclick="copy()">复制（带线路号）</button>
+  <div class="row">
+    <button class="primary" id="btnBuild">生成列表</button>
 
-<div id="list"></div>
+    <button class="ghost" id="btnOCR">📷 识别截图（最多9张）</button>
+    <input id="file" class="fileHidden" type="file" accept="image/*" multiple />
+
+    <button class="ghost" id="btnPaste">📋 从剪贴板粘贴</button>
+
+    <button class="ghost" id="btnCopyAll">复制（带线路号）</button>
+    <button class="ghost" id="btnCopyAddr">只复制地址</button>
+
+    <button class="danger" id="btnClear">清空今天</button>
+  </div>
+
+  <div class="stat" id="stat">📦 今日共 0 单 ｜ ✅ 已送 0 ｜ 🕒 剩余 0</div>
+
+  <div class="sortbar">
+    <button class="sortbtn on" id="sortAsc">▲ 线路号升序</button>
+    <button class="sortbtn" id="sortDesc">▼ 线路号降序</button>
+  </div>
+
+  <input class="search" id="search" placeholder="搜索：输入线路号 / 街道 / 城市（例如 804 或 Chestnut）" />
+
+  <div class="hint">
+    <div class="progress" id="progress">OCR 未开始</div>
+    <div class="small">
+      重要：你的截图像 UniUni 这种“卡片很多字”，OCR 一定会读出一堆噪音。<br/>
+      这个版本会强制只提取：<b>1~4位路线号</b> + <b>地址（含 PA）</b>，其余全部丢掉。<br/>
+      如果你用“长截图”，分辨率会下降，建议：<b>最多每张截 6~10 条</b>（清晰很多）。
+    </div>
+  </div>
+
+  <div class="list" id="list"></div>
+
+  <div class="small">提示：点“导航”会自动✅。每天线路号不一样也没关系，粘贴当天的就行。</div>
 </div>
 
 <script>
-let orders=[];
+/* ========= 每天独立存储 ========= */
+function todayKey(){
+  const d=new Date();
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+const K_INPUT = "rn:input:"+todayKey();
+const K_DONE  = "rn:done:"+todayKey();
+const K_SORT  = "rn:sort";
 
-async function runOCR(){
-  const files=[...document.getElementById('imgs').files].slice(0,9);
-  let allText="";
-  for(const f of files){
-    const r=await Tesseract.recognize(f,'eng');
-    allText+=r.data.text+"\n";
+let doneSet = new Set(JSON.parse(localStorage.getItem(K_DONE) || "[]"));
+let sortMode = localStorage.getItem(K_SORT) || "asc"; // asc/desc
+let orders = []; // {id,noStr,noNum,addr,done}
+
+/* ========= DOM ========= */
+const elInput = document.getElementById('input');
+const elList  = document.getElementById('list');
+const elStat  = document.getElementById('stat');
+const elSearch= document.getElementById('search');
+const elProgress=document.getElementById('progress');
+const elFile = document.getElementById('file');
+
+document.getElementById('btnBuild').addEventListener('click', buildList);
+document.getElementById('btnClear').addEventListener('click', clearToday);
+document.getElementById('btnCopyAll').addEventListener('click', ()=>copyText(makeCopyText(true)));
+document.getElementById('btnCopyAddr').addEventListener('click', ()=>copyText(makeCopyText(false)));
+document.getElementById('btnPaste').addEventListener('click', pasteClipboard);
+
+document.getElementById('sortAsc').addEventListener('click', ()=>setSort("asc"));
+document.getElementById('sortDesc').addEventListener('click', ()=>setSort("desc"));
+
+document.getElementById('btnOCR').addEventListener('click', ()=>{
+  elFile.value = "";
+  elFile.click();
+});
+elFile.addEventListener('change', async ()=>{
+  const files = Array.from(elFile.files || []);
+  if(!files.length) return;
+  if(files.length>9){
+    alert("最多选择 9 张图");
+    return;
   }
-  document.getElementById('input').value=allText;
+  await ocrImages(files);
+});
+
+elSearch.addEventListener('input', renderList);
+
+/* ========= 恢复输入 ========= */
+elInput.value = localStorage.getItem(K_INPUT) || "";
+elInput.addEventListener('input', ()=> localStorage.setItem(K_INPUT, elInput.value));
+
+/* ========= 排序 ========= */
+function setSort(mode){
+  sortMode = mode;
+  localStorage.setItem(K_SORT, sortMode);
+  document.getElementById('sortAsc').classList.toggle('on', sortMode==="asc");
+  document.getElementById('sortDesc').classList.toggle('on', sortMode==="desc");
+  renderAll();
+}
+function sortOrders(arr){
+  const a = arr.slice();
+  a.sort((x,y)=>{
+    if(sortMode==="asc") return x.noNum - y.noNum;
+    return y.noNum - x.noNum;
+  });
+  return a;
 }
 
-function build(){
-  orders=[];
-  const lines=document.getElementById('input').value.split('\n');
-
-  let currentNo=null;
-
-  for(const l of lines){
-    // 线路号：1–4 位，优先取大的
-    const nums=[...l.matchAll(/(?<!\d)(\d{1,4})(?!\d)/g)]
-      .map(x=>parseInt(x[1])).filter(n=>n<10000);
-    if(nums.length) currentNo=Math.max(...nums);
-
-    // 地址
-    if(/(St|Street|Ave|Avenue|Rd|Road|Blvd|Dr|Way|Pl|Ct).*(Pittsburgh|PA)/i.test(l)){
-      orders.push({no:currentNo,addr:l.trim()});
+/* ========= 解析输入（手动粘贴） ========= */
+function parseLines(text){
+  const lines = text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  const out = [];
+  for(const line of lines){
+    const m = line.match(/^(?:NO\.?\s*)?(\d{1,4})[,\s，]+(.+)$/i);
+    if(m){
+      out.push({noStr:m[1], noNum:parseInt(m[1],10), addr:cleanupAddr(m[2])});
     }
   }
-  render();
+  return out;
 }
 
-function render(){
-  const box=document.getElementById('list');
-  box.innerHTML="";
-  orders.sort((a,b)=>a.no-b.no);
-  for(const o of orders){
-    const d=document.createElement('div');
-    d.className="card";
-    d.innerHTML=`
-      <div>
-        <div class="no">NO.${o.no}</div>
-        <div class="addr">${o.addr}</div>
-      </div>
-      <button class="primary" onclick="nav('${o.addr.replace(/'/g,'')}')">导航</button>
-    `;
-    box.appendChild(d);
+/* ========= OCR：关键在这里（强力提取“路线号+地址”） ========= */
+/*
+  我们只信这个模式：
+  (1~4位路线号) + (街道号+街道名 ... , City, PA [zip])
+  其余噪音一律扔掉
+*/
+function extractNoAddrPairs(raw){
+  let s = String(raw || "");
+  // 统一空白
+  s = s.replace(/\u00A0/g,' ').replace(/\s+/g,' ').trim();
+
+  // 常见 OCR 错把逗号/点搞乱：先粗清洗
+  s = s.replace(/[|]/g,' ').replace(/[“”]/g,'"');
+
+  const results = [];
+
+  // 地址关键词：必须出现 PA（这样能过滤掉人名、日期、单号等噪音）
+  // street suffix 尽量多一点
+  const suffix = "(?:St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Ln|Lane|Blvd|Boulevard|Ct|Court|Pl|Place|Way|Pkwy|Parkway|Ter|Terrace|Cir|Circle|Hwy|Highway|Ste|Suite|Apt|Unit)";
+  const city = "(?:Pittsburgh|Crafton|McKees\\s*Rocks|Rosslyn\\s*Farms|Allegheny|Ingram|Carnegie|Coraopolis)";
+  const addrPattern =
+    "(\\d{1,6}\\s+[A-Za-z0-9#.'\\- ]+\\s+"+suffix+"(?:\\s+[A-Za-z0-9#.'\\- ]+)*)\\s*,?\\s*"+city+"\\s*,?\\s*(?:PA|PENN(?:SYLVANIA)?)\\s*(\\d{5})?";
+
+  // 路线号 + 地址：路线号允许与地址之间夹杂少量噪音（比如 OCR 把 NO. 识别丢了）
+  const re = new RegExp("(?:NO\\.?\\s*)?(\\d{1,4})\\s+[^0-9]{0,20}?"+addrPattern, "ig");
+
+  let m;
+  while((m = re.exec(s)) !== null){
+    const no = m[1];
+    const street = m[2];
+    const zip = m[3] ? (" "+m[3]) : "";
+    // 统一成 “street, City, PA zip”
+    // 这里 City 用原匹配串里包含的 city（在 streetPattern后面），但我们没单独捕获，简单用原 m[0] 再提一次
+    const chunk = m[0];
+
+    // 从 chunk 里再抓一次 city+PA
+    const cm = chunk.match(new RegExp(city, "i"));
+    const cityText = cm ? cm[0].replace(/\s+/g,' ') : "Pittsburgh";
+
+    const addr = cleanupAddr(street + ", " + cityText + ", PA" + zip);
+    results.push({noStr:no, noNum:parseInt(no,10), addr});
+  }
+
+  // 去重
+  const seen = new Set();
+  const uniq = [];
+  for(const r of results){
+    const k = r.noStr + "||" + r.addr.toLowerCase();
+    if(seen.has(k)) continue;
+    seen.add(k);
+    uniq.push(r);
+  }
+  return uniq;
+}
+
+function cleanupAddr(a){
+  let s = String(a||"").trim();
+  // 去掉多余省略号和奇怪符号
+  s = s.replace(/…+/g,'').replace(/\s+/g,' ');
+  // 修 normal：逗号前空格
+  s = s.replace(/\s+,/g,',');
+  // 修 Pittsburgh P... 这种
+  s = s.replace(/Pittsburgh\s*P\.*\b/ig,"Pittsburgh, PA");
+  s = s.replace(/PENN\.*\b/ig,"PA");
+  return s.trim();
+}
+
+/* ========= OCR 图片预处理：放大 + 黑白化（减少乱码） ========= */
+async function preprocessImageToCanvas(file){
+  const img = await loadImage(file);
+  const scale = 2; // 放大 2 倍更利于 OCR
+  const w = Math.round(img.width * scale);
+  const h = Math.round(img.height * scale);
+
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const ctx = c.getContext('2d', {willReadFrequently:true});
+  ctx.drawImage(img, 0, 0, w, h);
+
+  const data = ctx.getImageData(0,0,w,h);
+  const d = data.data;
+
+  // 灰度 + 简单阈值二值化（偏保守）
+  for(let i=0;i<d.length;i+=4){
+    const r=d[i], g=d[i+1], b=d[i+2];
+    const gray = (r*0.299 + g*0.587 + b*0.114);
+    const v = gray > 160 ? 255 : 0; // 阈值可调
+    d[i]=d[i+1]=d[i+2]=v;
+    d[i+3]=255;
+  }
+  ctx.putImageData(data,0,0);
+  return c;
+}
+function loadImage(file){
+  return new Promise((res,rej)=>{
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = ()=>{ URL.revokeObjectURL(url); res(img); };
+    img.onerror = rej;
+    img.src = url;
+  });
+}
+
+/* ========= OCR 主流程 ========= */
+async function ocrImages(files){
+  elProgress.textContent = "OCR 处理中…（第一次会慢一点）";
+  try{
+    const allPairs = [];
+    for(let i=0;i<files.length;i++){
+      elProgress.textContent = `OCR 处理中… 第 ${i+1}/${files.length} 张`;
+      const canvas = await preprocessImageToCanvas(files[i]);
+
+      const { data } = await Tesseract.recognize(
+        canvas,
+        "eng", // 地址是英文，用 eng 减少乱码
+        {
+          logger: m => {
+            // 只显示关键进度
+            if(m.status === "recognizing text"){
+              const pct = Math.round((m.progress||0)*100);
+              elProgress.textContent = `OCR 处理中… 第 ${i+1}/${files.length} 张（${pct}%）`;
+            }
+          }
+        }
+      );
+
+      const text = (data && data.text) ? data.text : "";
+      const pairs = extractNoAddrPairs(text);
+      allPairs.push(...pairs);
+    }
+
+    // 写回输入框：按“线路号 地址”每行
+    if(!allPairs.length){
+      elProgress.textContent = "OCR 完成，但没提取到有效地址（需要包含 PA）。建议换更清晰的截图。";
+      alert("没提取到有效的“路线号+地址”。建议截图更清晰，或每张截图少一些条目。");
+      return;
+    }
+
+    // 合并去重
+    const seen = new Set();
+    const uniq = [];
+    for(const p of allPairs){
+      const k = p.noStr + "||" + p.addr.toLowerCase();
+      if(seen.has(k)) continue;
+      seen.add(k);
+      uniq.push(p);
+    }
+
+    // 直接输出到 textarea（你也可以再手动删几行）
+    elInput.value = uniq.map(x=>`${x.noStr} ${x.addr}`).join("\n");
+    localStorage.setItem(K_INPUT, elInput.value);
+
+    elProgress.textContent = `OCR 完成 ✅ 提取到 ${uniq.length} 条（已自动过滤乱码）`;
+    buildList();
+  }catch(e){
+    console.error(e);
+    elProgress.textContent = "OCR 出错了（可能网络/CDN 或图片太大）。";
+    alert("OCR 出错了：请换几张更小的截图，或分成两次（每次 4~6 张）。");
   }
 }
 
-function nav(addr){
-  location.href="https://www.google.com/maps/dir/?api=1&destination="+encodeURIComponent(addr);
+/* ========= 构建列表 ========= */
+function buildList(){
+  const parsed = parseLines(elInput.value || "");
+  // 用 “no+addr” 做唯一键（每天不一样没关系）
+  orders = parsed.map(p=>{
+    const id = p.noStr + "||" + p.addr;
+    return {
+      id,
+      noStr:p.noStr,
+      noNum:p.noNum,
+      addr:p.addr,
+      done: doneSet.has(id)
+    };
+  });
+
+  // 去重（防止你贴重复）
+  const seen = new Set();
+  orders = orders.filter(o=>{
+    const k = o.noStr + "||" + o.addr.toLowerCase();
+    if(seen.has(k)) return false;
+    seen.add(k); return true;
+  });
+
+  renderAll();
+  saveDone();
 }
 
-function copy(){
-  const t=orders.map(o=>`${o.no} ${o.addr}`).join('\n');
-  navigator.clipboard.writeText(t);
-  alert("已复制");
+/* ========= 统计 ========= */
+function renderStat(){
+  const total = orders.length;
+  const sent = orders.filter(o=>o.done).length;
+  elStat.textContent = `📦 今日共 ${total} 单 ｜ ✅ 已送 ${sent} ｜ 🕒 剩余 ${total - sent}`;
 }
+
+/* ========= 列表渲染 ========= */
+function renderList(){
+  elList.innerHTML = "";
+  const q = (elSearch.value || "").trim().toLowerCase();
+
+  let view = sortOrders(orders);
+  if(q){
+    view = view.filter(o => (o.noStr+" "+o.addr).toLowerCase().includes(q));
+  }
+
+  view.forEach(o=>{
+    const card = document.createElement('div');
+    card.className = "card" + (o.done ? " delivered" : "");
+    card.innerHTML = `
+      <div class="left">
+        <div class="no">NO.${escapeHtml(o.noStr)}</div>
+        <div style="min-width:0">
+          <div class="addr">${escapeHtml(o.addr)}</div>
+          <div class="sub">点导航自动✅ ｜ 可升序/降序</div>
+        </div>
+      </div>
+      <div class="actions">
+        <input class="chk" type="checkbox" ${o.done?"checked":""} />
+        <button class="navbtn">▶ 导航</button>
+      </div>
+    `;
+
+    card.querySelector('input').addEventListener('change', (e)=>{
+      o.done = e.target.checked;
+      if(o.done) doneSet.add(o.id);
+      else doneSet.delete(o.id);
+      saveDone();
+      renderAll();
+    });
+
+    card.querySelector('.navbtn').addEventListener('click', ()=>{
+      startNav(o);
+    });
+
+    elList.appendChild(card);
+  });
+
+  renderStat();
+}
+
+function renderAll(){
+  renderStat();
+  renderList();
+}
+
+/* ========= 已送存储 ========= */
+function saveDone(){
+  localStorage.setItem(K_DONE, JSON.stringify([...doneSet]));
+}
+
+/* ========= 导航：Google Maps ========= */
+function startNav(o){
+  // 自动✅
+  if(!o.done){
+    o.done = true;
+    doneSet.add(o.id);
+    saveDone();
+    renderAll();
+  }
+  const url = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(o.addr) + "&travelmode=driving";
+  window.location.href = url;
+}
+
+/* ========= 复制 ========= */
+function makeCopyText(withNo){
+  const view = sortOrders(orders);
+  if(withNo) return view.map(o=>`${o.noStr} ${o.addr}`).join("\n");
+  return view.map(o=>o.addr).join("\n");
+}
+async function copyText(txt){
+  try{
+    await navigator.clipboard.writeText(txt);
+    alert("已复制 ✅");
+  }catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = txt;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    alert("已复制 ✅");
+  }
+}
+
+/* ========= 从剪贴板粘贴 ========= */
+async function pasteClipboard(){
+  try{
+    const t = await navigator.clipboard.readText();
+    if(!t){ alert("剪贴板没有内容"); return; }
+    elInput.value = t.trim();
+    localStorage.setItem(K_INPUT, elInput.value);
+    buildList();
+  }catch(e){
+    alert("无法读取剪贴板（iPhone 有时需要你先点一下输入框再试）");
+  }
+}
+
+/* ========= 清空今天 ========= */
+function clearToday(){
+  if(!confirm("确认清空今天？（已送状态也会清空）")) return;
+  doneSet = new Set();
+  localStorage.removeItem(K_INPUT);
+  localStorage.removeItem(K_DONE);
+  elInput.value = "";
+  orders = [];
+  elProgress.textContent = "OCR 未开始";
+  renderAll();
+}
+
+/* ========= 安全输出 ========= */
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+}
+
+/* ========= 初始化 ========= */
+(function init(){
+  document.getElementById('sortAsc').classList.toggle('on', sortMode==="asc");
+  document.getElementById('sortDesc').classList.toggle('on', sortMode==="desc");
+
+  // 自动生成一次（如果你之前有保存）
+  buildList();
+})();
 </script>
 </body>
 </html>
