@@ -1,144 +1,270 @@
 <!doctype html>
 <html lang="zh">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>单点导航（纯列表最终版 + OCR）</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Route Assistant (List + OCR)</title>
 
-  <!-- Tesseract.js (OCR) -->
-  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<!-- OCR：Tesseract.js（纯前端，不用服务器） -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
-  <style>
-    :root{
-      --bg:#f6f7f9; --card:#fff; --line:#e8e8ee;
-      --blue:#1a73e8; --dark:#111; --muted:#666;
-      --green:#1bbf5c; --red:#c62828; --chip:#0b0b0b;
-    }
-    body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial}
-    .wrap{max-width:860px;margin:0 auto;padding:12px}
-    h2{margin:8px 0 10px;font-size:26px;letter-spacing:.5px}
+<style>
+  :root{
+    --bg:#f6f7f9; --card:#fff; --line:#e8e8ee;
+    --blue:#1a73e8; --dark:#111; --muted:#666;
+    --green:#1bbf5c; --red:#c62828;
+  }
+  body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial}
+  .wrap{max-width:820px;margin:0 auto;padding:12px}
+  .topline{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  h2{margin:8px 0 10px;font-size:26px}
+  textarea{
+    width:100%;height:150px;box-sizing:border-box;border-radius:14px;border:1px solid var(--line);
+    padding:12px;font-size:14px;line-height:1.35;background:#fff
+  }
+  .row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;align-items:center}
+  button{border:0;border-radius:14px;padding:12px 16px;font-size:16px;font-weight:900}
+  .primary{background:var(--blue);color:#fff}
+  .ghost{background:#fff;border:1px solid var(--line);color:#111}
+  .danger{background:#fff;border:1px solid #ffb3b3;color:var(--red)}
+  .small{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.35}
+  .pill{background:#fff;border:1px solid var(--line);border-radius:999px;padding:8px 10px;font-weight:900}
+  .lang{display:flex;gap:8px;align-items:center}
+  .lang button{padding:8px 12px;font-size:14px;border-radius:999px}
+  .lang .on{background:var(--blue);color:#fff;border:1px solid var(--blue)}
+  .lang .off{background:#fff;color:#111;border:1px solid var(--line)}
 
-    textarea{
-      width:100%;height:150px;box-sizing:border-box;border-radius:14px;border:1px solid var(--line);
-      padding:12px;font-size:14px;line-height:1.35;background:#fff
-    }
-    .row{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0;align-items:center}
-    button{border:0;border-radius:14px;padding:12px 16px;font-size:16px;font-weight:900;cursor:pointer}
-    button:disabled{opacity:.55;cursor:not-allowed}
-    .primary{background:var(--blue);color:#fff}
-    .ghost{background:#fff;border:1px solid var(--line);color:#111}
-    .danger{background:#fff;border:1px solid #ffb3b3;color:var(--red)}
-    .chip{background:#111;color:#fff;border-radius:14px;padding:10px 12px;font-weight:1000}
+  /* 置顶统计栏（一直看得到） */
+  .sticky{position:sticky; top:0; z-index:999;background:var(--bg); padding-top:8px;}
+  .stat{
+    background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;
+    font-size:16px;font-weight:900;display:flex;gap:12px;flex-wrap:wrap;align-items:center
+  }
+  .sortbar{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
+  .sortbtn{background:#fff;border:1px solid var(--line);color:#111}
+  .sortbtn.on{background:var(--blue);border-color:var(--blue);color:#fff}
 
-    .stat{
-      background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;
-      font-size:16px;font-weight:1000;display:flex;gap:12px;flex-wrap:wrap;align-items:center
-    }
+  /* 搜索 */
+  .search{
+    width:100%;box-sizing:border-box;margin:8px 0 0;
+    border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:14px;background:#fff
+  }
 
-    .sortbar{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
-    .sortbtn{background:#fff;border:1px solid var(--line);color:#111}
-    .sortbtn.on{background:var(--blue);border-color:var(--blue);color:#fff}
+  /* 列表卡片 */
+  .list{margin-top:10px}
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:18px;
+    padding:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;
+    margin-top:10px;
+  }
+  .left{min-width:0;display:flex;gap:12px;align-items:flex-start}
+  .no{
+    background:var(--dark);color:#fff;border-radius:14px;padding:10px 12px;
+    font-weight:1000;font-size:16px;line-height:1;flex:0 0 auto
+  }
+  .addr{font-size:15px;font-weight:900;line-height:1.25;word-break:break-word}
+  .sub{font-size:12px;color:var(--muted);margin-top:4px;font-weight:700}
+  .actions{display:flex;gap:10px;align-items:center;flex:0 0 auto}
+  .chk{width:22px;height:22px;transform:scale(1.15)}
+  .navbtn{background:var(--blue);color:#fff;border-radius:14px;padding:12px 14px;font-weight:1000}
+  .editbtn{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-weight:1000}
+  .delivered{opacity:.45}
 
-    .search{
-      width:100%;box-sizing:border-box;margin-top:10px;
-      border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:14px;background:#fff
-    }
-
-    .small{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4}
-
-    .list{margin-top:10px}
-    .card{
-      background:var(--card);border:1px solid var(--line);border-radius:18px;
-      padding:14px;display:flex;justify-content:space-between;align-items:center;gap:12px;
-      margin-top:10px;
-    }
-    .left{min-width:0;display:flex;gap:12px;align-items:flex-start}
-    .no{
-      background:#0b0b0b;color:#fff;border-radius:14px;padding:10px 12px;
-      font-weight:1000;font-size:16px;line-height:1;flex:0 0 auto;
-      min-width:78px;text-align:center;
-    }
-    .addr{font-size:15px;font-weight:900;line-height:1.25;word-break:break-word}
-    .sub{font-size:12px;color:var(--muted);margin-top:4px;font-weight:700}
-
-    .actions{display:flex;gap:10px;align-items:center;flex:0 0 auto}
-    .chk{width:22px;height:22px;transform:scale(1.15)}
-    .navbtn{background:var(--blue);color:#fff;border-radius:14px;padding:12px 14px;font-weight:1000}
-    .editbtn{background:#fff;border:1px solid var(--line);color:#111;border-radius:14px;padding:12px 12px;font-weight:1000}
-    .delivered{opacity:.45}
-
-    .progressBox{
-      margin-top:10px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;
-      font-size:13px;color:#333;line-height:1.4
-    }
-    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace}
-    .ok{color:var(--green);font-weight:1000}
-    .warn{color:#b35a00;font-weight:900}
-    .err{color:var(--red);font-weight:1000}
-
-    /* iOS 点击更稳 */
-    button, input { -webkit-tap-highlight-color: transparent; }
-  </style>
+  /* OCR 进度条 */
+  .progress{
+    background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-top:8px;
+    font-size:13px;color:#111;font-weight:800;
+  }
+  .bar{height:10px;background:#eee;border-radius:999px;overflow:hidden;margin-top:8px}
+  .bar > div{height:100%;width:0;background:var(--blue)}
+</style>
 </head>
 
 <body>
 <div class="wrap">
-  <h2>单点导航（纯列表最终版 + OCR）</h2>
+  <div class="topline">
+    <h2 id="title">路线助手（纯列表最终版 + OCR）</h2>
+    <div class="lang">
+      <span class="pill" id="langLabel">语言</span>
+      <button id="btnZh" class="on">中文</button>
+      <button id="btnEn" class="off">EN</button>
+    </div>
+  </div>
 
-  <textarea id="input" placeholder="你可以：1）粘贴文本；2）点【识别截图】最多9张
-格式：每行一单（线路号 空格 地址）
-例：
-804 1040 Elkton St, Pittsburgh, PA
-805 516 Lorenz Ave, Pittsburgh, PA"></textarea>
+  <textarea id="input"></textarea>
 
   <div class="row">
-    <button class="primary" id="btnBuild">生成列表</button>
-
-    <label class="ghost" style="display:inline-flex;align-items:center;gap:10px;font-weight:1000;padding:12px 16px;border-radius:14px;cursor:pointer;">
-      📷 识别截图（最多9张）
-      <input id="imgInput" type="file" accept="image/*" multiple style="display:none" />
-    </label>
-
-    <button class="ghost" id="btnPaste">📋 从剪贴板粘贴</button>
-    <button class="ghost" id="btnCopyAll">复制（带线路号）</button>
-    <button class="ghost" id="btnCopyAddr">只复制地址</button>
-    <button class="danger" id="btnClear">清空今天</button>
+    <button class="primary" id="btnBuild"></button>
+    <button class="ghost" id="btnOCR"></button>
+    <button class="ghost" id="btnPaste"></button>
+    <button class="ghost" id="btnCopyAll"></button>
+    <button class="ghost" id="btnCopyAddr"></button>
+    <button class="danger" id="btnClear"></button>
   </div>
 
-  <div class="stat" id="stat">📦 今日共 0 单 ｜ ✅ 已送 0 ｜ 🕒 剩余 0</div>
+  <div class="sticky">
+    <div class="stat" id="stat"></div>
 
-  <div class="sortbar" id="sortbar">
-    <button class="sortbtn on" id="sortAsc">🔼 线路号升序</button>
-    <button class="sortbtn" id="sortDesc">🔽 线路号降序</button>
+    <div class="sortbar">
+      <button class="sortbtn" id="sortRaw"></button>
+      <button class="sortbtn on" id="sortAsc"></button>
+      <button class="sortbtn" id="sortDesc"></button>
+    </div>
+
+    <input class="search" id="search" />
+    <div id="progress" class="progress" style="display:none">
+      <div id="progText"></div>
+      <div class="bar"><div id="progBar"></div></div>
+    </div>
   </div>
-
-  <input class="search" id="search" placeholder="搜索：输入线路号 / 街道 / 城市（例如 804 或 Chestnut）" />
-
-  <div id="progress" class="progressBox" style="display:none"></div>
 
   <div class="list" id="list"></div>
 
-  <div class="small">
-    ✅ 规则：点“导航”自动勾选。<br/>
-    ✅ 每天线路号不同没关系：系统按“今天日期”单独保存。<br/>
-    ✅ OCR 偶尔会错：你可以点 ✏️ 直接改线路号/地址。
-  </div>
+  <div class="small" id="tips"></div>
+
+  <!-- 多选图片 -->
+  <input id="file" type="file" accept="image/*" multiple style="display:none" />
 </div>
 
 <script>
-/* ===================== 存储：按天 ===================== */
+/* ===================== i18n：中英切换 ===================== */
+const K_LANG = "rn2:lang";
+let lang = localStorage.getItem(K_LANG) || "zh";
+
+const I18N = {
+  zh: {
+    title: "路线助手（纯列表最终版 + OCR）",
+    langLabel: "语言",
+    inputPH: `方式1：粘贴（每行：线路号 空格 地址）
+例：
+55 1112 Berkshire Ave, Pittsburgh, PA
+56 1237 Berkshire Ave, Pittsburgh, PA
+
+方式2：点【识别截图】最多9张（推荐）
+会自动提取“路线号 + 地址”`,
+    build: "生成列表",
+    ocr: "📷 识别截图（最多9张）",
+    paste: "📋 从剪贴板粘贴",
+    copyAll: "复制（带线路号）",
+    copyAddr: "只复制地址",
+    clear: "清空今天",
+    stat: (t,s,r)=>`📦 今日共 ${t} 单 ｜ ✅ 已送 ${s} ｜ 🕒 剩余 ${r}`,
+    sortRaw: "原始顺序",
+    sortAsc: "线路号升序（默认）",
+    sortDesc: "线路号降序",
+    searchPH: "搜索：线路号 / 街道 / 城市（例如 55 或 Berkshire）",
+    sub: "点导航自动✅ ｜ ✏️可手改 ｜ 按线路号排序",
+    nav: "▶ 导航",
+    editTitle: "手动修改",
+    ocrReady: "OCR 准备中…",
+    ocrSlicing: (i,n)=>`OCR 第 ${i}/${n} 张：切片中…`,
+    ocrRunning: (i,n,s)=>`OCR 第 ${i}/${n} 张：切片 ${s}/4 识别中…`,
+    ocrNone: "没有识别到有效的“线路号 + 地址”。\n\n建议：\n1) 用“配送中列表”截图（一屏3-5张卡片）\n2) 不要太糊/太小\n3) 截图里必须看得到地址那一行",
+    ocrDone: n=>`OCR 完成 ✅ 提取到 ${n} 条（已去重并追加到输入框）\n\n如果有个别错的：点 ✏️ 手动改那一条就行。`,
+    alertClipEmpty: "剪贴板为空",
+    alertClipDenied: "无法读取剪贴板（请在 Safari 里允许粘贴权限）",
+    alertCopied: "已复制 ✅",
+    confirmClear: "确定清空今天的数据吗？",
+    promptNo: "修改线路号（1-4位数字）",
+    promptAddr: "修改地址（建议包含城市/PA）",
+    errNo: "线路号必须是 1-4 位数字",
+    max9: n=>`最多选择 9 张图。你现在选了 ${n} 张。`,
+    tips: `✅ 点“导航”会自动勾选已送达，并跳转 Google Maps。<br/>
+✅ 线路号每天不一样没关系：系统按“今天”独立保存（明天自动新的一天）。<br/>
+✅ OCR 可能偶尔把号/地址识别错：点 ✏️ 只改这一条就行（会同步保存）。<br/>
+✅ OCR 强化：切片重叠 + 左侧数字白名单 + 地址规则更泛化。`
+  },
+  en: {
+    title: "Route Assistant (List + OCR)",
+    langLabel: "Language",
+    inputPH: `Option 1: Paste (one per line: RouteNo + space + Address)
+Example:
+55 1112 Berkshire Ave, Pittsburgh, PA
+56 1237 Berkshire Ave, Pittsburgh, PA
+
+Option 2: Click [Scan Screenshots] up to 9 images (recommended)
+Auto-extracts Route No + Address`,
+    build: "Build List",
+    ocr: "📷 Scan Screenshots (max 9)",
+    paste: "📋 Paste from Clipboard",
+    copyAll: "Copy (Route + Address)",
+    copyAddr: "Copy Address Only",
+    clear: "Clear Today",
+    stat: (t,s,r)=>`📦 Total ${t} ｜ ✅ Delivered ${s} ｜ 🕒 Remaining ${r}`,
+    sortRaw: "Original Order",
+    sortAsc: "Route No Asc (default)",
+    sortDesc: "Route No Desc",
+    searchPH: "Search: route / street / city (e.g. 55 or Berkshire)",
+    sub: "Nav auto-marks ✅ ｜ ✏️ edit item ｜ Sorted by route no",
+    nav: "▶ Navigate",
+    editTitle: "Edit",
+    ocrReady: "Preparing OCR…",
+    ocrSlicing: (i,n)=>`OCR ${i}/${n}: slicing…`,
+    ocrRunning: (i,n,s)=>`OCR ${i}/${n}: slice ${s}/4 recognizing…`,
+    ocrNone: "No valid Route No + Address found.\n\nTips:\n1) Use in-progress delivery list screenshots (3–5 cards per screen)\n2) Avoid blurry / too small\n3) Make sure the address line is visible",
+    ocrDone: n=>`OCR done ✅ Extracted ${n} items (deduped and appended to input)\n\nIf something is wrong: tap ✏️ to fix that item.`,
+    alertClipEmpty: "Clipboard is empty",
+    alertClipDenied: "Cannot read clipboard (allow paste permission in Safari)",
+    alertCopied: "Copied ✅",
+    confirmClear: "Clear today's data?",
+    promptNo: "Edit Route No (1–4 digits)",
+    promptAddr: "Edit Address (include city/PA if possible)",
+    errNo: "Route No must be 1–4 digits",
+    max9: n=>`Max 9 images. You selected ${n}.`,
+    tips: `✅ “Navigate” auto-marks delivered and opens Google Maps.<br/>
+✅ Saved per day (tomorrow starts fresh).<br/>
+✅ OCR can be wrong sometimes: tap ✏️ to edit just that item.<br/>
+✅ OCR boost: overlapped slices + digit whitelist for route no + broader address rules.`
+  }
+};
+
+function applyLang(){
+  const t = I18N[lang];
+  document.documentElement.lang = (lang==="zh") ? "zh" : "en";
+  document.getElementById('title').textContent = t.title;
+  document.getElementById('langLabel').textContent = t.langLabel;
+
+  elInput.placeholder = t.inputPH;
+
+  document.getElementById('btnBuild').textContent = t.build;
+  document.getElementById('btnOCR').textContent = t.ocr;
+  document.getElementById('btnPaste').textContent = t.paste;
+  document.getElementById('btnCopyAll').textContent = t.copyAll;
+  document.getElementById('btnCopyAddr').textContent = t.copyAddr;
+  document.getElementById('btnClear').textContent = t.clear;
+
+  document.getElementById('sortRaw').textContent = t.sortRaw;
+  document.getElementById('sortAsc').textContent = t.sortAsc;
+  document.getElementById('sortDesc').textContent = t.sortDesc;
+
+  elSearch.placeholder = t.searchPH;
+  document.getElementById('tips').innerHTML = t.tips;
+
+  document.getElementById('btnZh').className = (lang==="zh") ? "on" : "off";
+  document.getElementById('btnEn').className = (lang==="en") ? "on" : "off";
+
+  renderAll();
+}
+
+document.getElementById('btnZh').onclick = ()=>{ lang="zh"; localStorage.setItem(K_LANG,lang); applyLang(); };
+document.getElementById('btnEn').onclick = ()=>{ lang="en"; localStorage.setItem(K_LANG,lang); applyLang(); };
+
+/* ===================== 存储：按天独立 ===================== */
 function todayKey(){
   const d=new Date();
   const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
   return `${y}-${m}-${day}`;
 }
-const K_INPUT = "rn:input:"+todayKey();
-const K_DONE  = "rn:done:"+todayKey();
-const K_SORT  = "rn:sort";
+const K_INPUT = "rn2:input:"+todayKey();
+const K_DONE  = "rn2:done:"+todayKey();
+const K_SORT  = "rn2:sort";
+const K_FIX   = "rn2:fix:"+todayKey();
 
-/* ===================== 状态 ===================== */
 let doneSet = new Set(JSON.parse(localStorage.getItem(K_DONE) || "[]"));
-let sortMode = localStorage.getItem(K_SORT) || "asc"; // asc / desc
+let sortMode = localStorage.getItem(K_SORT) || "asc";
+let fixedMap = JSON.parse(localStorage.getItem(K_FIX) || "{}");
+
+/* ===================== 数据 ===================== */
 let orders = []; // {id,noStr,noNum,addr,done}
 
 /* ===================== DOM ===================== */
@@ -146,110 +272,129 @@ const elInput = document.getElementById('input');
 const elList  = document.getElementById('list');
 const elStat  = document.getElementById('stat');
 const elSearch= document.getElementById('search');
+const elFile  = document.getElementById('file');
 const elProg  = document.getElementById('progress');
+const elProgText = document.getElementById('progText');
+const elProgBar  = document.getElementById('progBar');
 
-const btnBuild = document.getElementById('btnBuild');
-const btnClear = document.getElementById('btnClear');
-const btnCopyAll = document.getElementById('btnCopyAll');
-const btnCopyAddr = document.getElementById('btnCopyAddr');
-const btnPaste = document.getElementById('btnPaste');
-const imgInput = document.getElementById('imgInput');
+document.getElementById('btnBuild').onclick = buildList;
+document.getElementById('btnClear').onclick = clearToday;
+document.getElementById('btnCopyAll').onclick = ()=>copyText(makeCopyText(true));
+document.getElementById('btnCopyAddr').onclick = ()=>copyText(makeCopyText(false));
+document.getElementById('btnOCR').onclick = ()=>elFile.click();
+document.getElementById('btnPaste').onclick = pasteFromClipboard;
 
+document.getElementById('sortRaw').onclick  = ()=>setSort("raw");
 document.getElementById('sortAsc').onclick  = ()=>setSort("asc");
 document.getElementById('sortDesc').onclick = ()=>setSort("desc");
 
-btnBuild.onclick = buildList;
-btnClear.onclick = clearToday;
-btnCopyAll.onclick = ()=>copyText(makeCopyText(true));
-btnCopyAddr.onclick = ()=>copyText(makeCopyText(false));
-btnPaste.onclick = pasteFromClipboard;
-
 elSearch.addEventListener('input', renderList);
 
+elFile.addEventListener('change', async ()=>{
+  const files = Array.from(elFile.files || []);
+  elFile.value = "";
+  if(!files.length) return;
+  if(files.length > 9){
+    alert(I18N[lang].max9(files.length));
+    return;
+  }
+  await runOCR(files);
+});
+
+/* ===================== 恢复输入 ===================== */
 elInput.value = localStorage.getItem(K_INPUT) || "";
 elInput.addEventListener('input', ()=> localStorage.setItem(K_INPUT, elInput.value));
 
-/* ===================== 工具 ===================== */
-function showProgress(html){
-  elProg.style.display = "block";
-  elProg.innerHTML = html;
+/* ===================== 粘贴板 ===================== */
+async function pasteFromClipboard(){
+  try{
+    const txt = await navigator.clipboard.readText();
+    if(!txt) return alert(I18N[lang].alertClipEmpty);
+    elInput.value = (elInput.value ? (elInput.value.trimEnd()+"\n") : "") + txt.trim();
+    localStorage.setItem(K_INPUT, elInput.value);
+    buildList();
+  }catch(e){
+    alert(I18N[lang].alertClipDenied);
+  }
 }
-function hideProgress(){ elProg.style.display="none"; elProg.innerHTML=""; }
 
-function escapeHtml(s){
-  return String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
+/* ===================== 解析：粘贴文本（每行：号 地址） ===================== */
+function parseLines(text){
+  const lines = (text||"").split(/\n+/).map(s=>s.trim()).filter(Boolean);
+  const out = [];
+  for(const line of lines){
+    const m = line.match(/^(?:NO\.?\s*)?(\d{1,4})[,\s，]+(.+)$/i);
+    if(m){
+      out.push({noStr:m[1], noNum:parseInt(m[1],10), addr:m[2].trim()});
+    }
+  }
+  return out;
 }
 
-function saveDone(){ localStorage.setItem(K_DONE, JSON.stringify([...doneSet])); }
-
+/* ===================== 排序 ===================== */
 function setSort(mode){
   sortMode = mode;
   localStorage.setItem(K_SORT, sortMode);
+  document.getElementById('sortRaw').classList.toggle('on', sortMode==="raw");
   document.getElementById('sortAsc').classList.toggle('on', sortMode==="asc");
   document.getElementById('sortDesc').classList.toggle('on', sortMode==="desc");
   renderAll();
 }
 function sortOrders(arr){
   const a = arr.slice();
-  a.sort((x,y)=>{
-    if(sortMode==="asc") return x.noNum - y.noNum;
-    return y.noNum - x.noNum;
-  });
+  if(sortMode==="raw") return a;
+  a.sort((x,y)=> sortMode==="asc" ? (x.noNum-y.noNum) : (y.noNum-x.noNum));
   return a;
-}
-
-/* ===================== 解析（手动粘贴文本用） ===================== */
-function parseLines(text){
-  const lines = text.split(/\n+/).map(s=>s.trim()).filter(Boolean);
-  const out = [];
-  let auto = 1;
-  for(const line of lines){
-    // 支持：NO.676 / 676, / 676 空格
-    const m = line.match(/^(?:NO\.?\s*)?(\d{1,4})[,\s，]+(.+)$/i);
-    if(m){
-      out.push({noStr: m[1], noNum: parseInt(m[1],10), addr: m[2].trim()});
-    }else{
-      // 没有线路号：给一个 A001（排最后）
-      const noStr = "A"+String(auto++).padStart(3,'0');
-      out.push({noStr, noNum: 999999 + auto, addr: line});
-    }
-  }
-  return out;
 }
 
 /* ===================== 构建列表 ===================== */
 function buildList(){
   const parsed = parseLines(elInput.value || "");
-  const old = new Map(orders.map(o=>[o.id,o]));
 
   orders = parsed.map(p=>{
-    const id = p.noStr + "||" + p.addr;   // 唯一键
-    const was = old.get(id);
+    const id = p.noStr + "||" + p.addr;
+    const fix = fixedMap[id];
+    const noStr = fix?.noStr || p.noStr;
+    const addr  = fix?.addr  || p.addr;
+    const noNum = parseInt(noStr,10);
+
     return {
       id,
-      noStr: p.noStr,
-      noNum: p.noNum,
-      addr: p.addr,
-      done: doneSet.has(id) || (was?was.done:false),
+      noStr,
+      noNum: Number.isFinite(noNum) ? noNum : 999999,
+      addr,
+      done: doneSet.has(id),
     };
   });
 
-  renderAll();
+  // 二次去重（防止手改后出现重复）
+  const seen = new Set();
+  orders = orders.filter(o=>{
+    const k = o.noStr + "||" + o.addr;
+    if(seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+
   saveDone();
+  renderAll();
 }
 
+/* ===================== 统计 ===================== */
 function renderStat(){
   const total = orders.length;
   const sent = orders.filter(o=>o.done).length;
-  elStat.textContent = `📦 今日共 ${total} 单 ｜ ✅ 已送 ${sent} ｜ 🕒 剩余 ${total - sent}`;
+  elStat.textContent = I18N[lang].stat(total, sent, total - sent);
 }
 
+/* ===================== 列表渲染 ===================== */
 function renderList(){
   elList.innerHTML = "";
   const q = (elSearch.value || "").trim().toLowerCase();
+
   let view = sortOrders(orders);
   if(q){
-    view = view.filter(o => (o.noStr+" "+o.addr).toLowerCase().includes(q));
+    view = view.filter(o => (`${o.noStr} ${o.addr}`).toLowerCase().includes(q));
   }
 
   view.forEach(o=>{
@@ -260,55 +405,17 @@ function renderList(){
         <div class="no">NO.${escapeHtml(o.noStr)}</div>
         <div style="min-width:0">
           <div class="addr">${escapeHtml(o.addr)}</div>
-          <div class="sub">点导航自动✅ ｜ 可升序/降序</div>
+          <div class="sub">${escapeHtml(I18N[lang].sub)}</div>
         </div>
       </div>
       <div class="actions">
-        <button class="editbtn" title="手动修改">✏️</button>
+        <button class="editbtn" title="${escapeHtml(I18N[lang].editTitle)}">✏️</button>
         <input class="chk" type="checkbox" ${o.done?"checked":""} />
-        <button class="navbtn">▶ 导航</button>
+        <button class="navbtn">${escapeHtml(I18N[lang].nav)}</button>
       </div>
     `;
 
-    // 手动改
-    card.querySelector('.editbtn').addEventListener('click', ()=>{
-      const newNo = prompt("修改线路号（1-4位数字）", o.noStr);
-      if(newNo===null) return;
-      const noClean = String(newNo).trim();
-      if(!/^\d{1,4}$/.test(noClean)){
-        alert("线路号必须是 1-4 位数字");
-        return;
-      }
-      const newAddr = prompt("修改地址（建议保留 city/state）", o.addr);
-      if(newAddr===null) return;
-      const addrClean = String(newAddr).trim();
-      if(!addrClean){
-        alert("地址不能为空");
-        return;
-      }
-
-      // 更新 doneSet 里旧ID
-      const oldId = o.id;
-      const wasDone = o.done;
-      doneSet.delete(oldId);
-
-      o.noStr = noClean;
-      o.noNum = parseInt(noClean,10);
-      o.addr = addrClean;
-      o.id = o.noStr + "||" + o.addr;
-
-      if(wasDone){
-        o.done = true;
-        doneSet.add(o.id);
-      }
-      saveDone();
-      // 同步回 textarea（让你复制更准）
-      syncTextareaFromOrders();
-      renderAll();
-    });
-
-    // 勾选
-    card.querySelector('input').addEventListener('change', (e)=>{
+    card.querySelector('.chk').addEventListener('change', (e)=>{
       o.done = e.target.checked;
       if(o.done) doneSet.add(o.id);
       else doneSet.delete(o.id);
@@ -316,27 +423,45 @@ function renderList(){
       renderAll();
     });
 
-    // 导航
     card.querySelector('.navbtn').addEventListener('click', ()=> startNav(o));
+
+    card.querySelector('.editbtn').addEventListener('click', ()=>{
+      const newNo = prompt(I18N[lang].promptNo, o.noStr);
+      if(newNo===null) return;
+      const noClean = String(newNo).trim().replace(/^NO\.?/i,'').trim();
+      if(!/^\d{1,4}$/.test(noClean)){
+        alert(I18N[lang].errNo);
+        return;
+      }
+      const newAddr = prompt(I18N[lang].promptAddr, o.addr);
+      if(newAddr===null) return;
+
+      fixedMap[o.id] = {noStr:noClean, addr:String(newAddr).trim()};
+      localStorage.setItem(K_FIX, JSON.stringify(fixedMap));
+
+      o.noStr = noClean;
+      o.noNum = parseInt(noClean,10);
+      o.addr  = String(newAddr).trim();
+      renderAll();
+    });
 
     elList.appendChild(card);
   });
 
   renderStat();
 }
-
-function renderAll(){ renderStat(); renderList(); }
-
-function syncTextareaFromOrders(){
-  // 按当前排序写回 textarea（更直观）
-  const view = sortOrders(orders);
-  elInput.value = view.map(o=>`${o.noStr} ${o.addr}`).join("\n");
-  localStorage.setItem(K_INPUT, elInput.value);
+function renderAll(){
+  renderStat();
+  renderList();
 }
 
-/* ===================== 导航：Google Maps ===================== */
+/* ===================== 已送存储 ===================== */
+function saveDone(){
+  localStorage.setItem(K_DONE, JSON.stringify([...doneSet]));
+}
+
+/* ===================== 导航：Google Maps（自动✅） ===================== */
 function startNav(o){
-  // 自动✅
   if(!o.done){
     o.done = true;
     doneSet.add(o.id);
@@ -356,7 +481,7 @@ function makeCopyText(withNo){
 async function copyText(txt){
   try{
     await navigator.clipboard.writeText(txt);
-    alert("已复制 ✅");
+    alert(I18N[lang].alertCopied);
   }catch(e){
     const ta = document.createElement('textarea');
     ta.value = txt;
@@ -364,349 +489,313 @@ async function copyText(txt){
     ta.select();
     document.execCommand('copy');
     ta.remove();
-    alert("已复制 ✅");
+    alert(I18N[lang].alertCopied);
   }
 }
 
 /* ===================== 清空今天 ===================== */
 function clearToday(){
-  if(!confirm("确定清空今天的数据吗？")) return;
-  orders = [];
-  doneSet = new Set();
-  localStorage.removeItem(K_DONE);
+  if(!confirm(I18N[lang].confirmClear)) return;
   localStorage.removeItem(K_INPUT);
+  localStorage.removeItem(K_DONE);
+  localStorage.removeItem(K_FIX);
+  doneSet = new Set();
+  fixedMap = {};
+  orders = [];
   elInput.value = "";
   renderAll();
 }
 
-/* ===================== 剪贴板粘贴 ===================== */
-async function pasteFromClipboard(){
-  try{
-    const text = await navigator.clipboard.readText();
-    if(!text) return alert("剪贴板没有文本");
-    elInput.value = text;
-    localStorage.setItem(K_INPUT, elInput.value);
-    buildList();
-  }catch(e){
-    alert("无法读取剪贴板（iPhone Safari 有时会限制）。你可以手动长按粘贴到输入框。");
-  }
+/* ===================== OCR 强化：重叠切片 + 左侧数字白名单 + 追加去重 ===================== */
+function showProgress(on){
+  elProg.style.display = on ? "block" : "none";
+  if(!on){ elProgText.textContent=""; elProgBar.style.width="0%"; }
+}
+function setProgress(text, pct){
+  elProgText.textContent = text;
+  elProgBar.style.width = Math.max(0, Math.min(100, pct||0)) + "%";
 }
 
-/* =========================================================
-   OCR：最多9张图
-   关键修正：你的规则“线路号 > 地址门牌号”
-   处理思路：
-   1) OCR 只要英文+数字即可（比中英混合更稳）
-   2) 先把文本按“看起来像地址的一行”提取
-   3) 在每条候选里找两个数字：较大的当线路号，较小的当门牌号（如果能确认）
-   4) 对被拆开的线路号做合并：如 "80 5" -> "805"
-========================================================= */
+function fileToImage(file){
+  return new Promise((resolve,reject)=>{
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = ()=>{ URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
 
-imgInput.addEventListener('change', async ()=>{
-  const files = Array.from(imgInput.files || []);
-  if(!files.length) return;
-  if(files.length > 9){
-    alert("最多只能选 9 张图");
-    imgInput.value = "";
-    return;
+/* 重叠切片：避免把“号”和“地址”切开 */
+async function sliceImageOverlap(file, parts=4, overlapRatio=0.12){
+  const img = await fileToImage(file);
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const canvases = [];
+  const partH = h / parts;
+  const overlap = Math.floor(partH * overlapRatio);
+
+  for(let i=0;i<parts;i++){
+    let y0 = Math.floor(i * partH) - (i===0 ? 0 : overlap);
+    let y1 = Math.floor((i+1) * partH) + (i===parts-1 ? 0 : overlap);
+    y0 = Math.max(0, y0);
+    y1 = Math.min(h, y1);
+    const ch = Math.max(1, y1 - y0);
+
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = ch;
+    c.getContext('2d').drawImage(img, 0, y0, w, ch, 0, 0, w, ch);
+    canvases.push(c);
   }
-  await runOCR(files);
-  imgInput.value = "";
-});
+  return canvases;
+}
 
-function normalizeOcrText(t){
-  // 常见乱字符清理 + 统一空格
-  return String(t || "")
-    .replace(/\u00A0/g, " ")
-    .replace(/[|“”‘’]/g, " ")
-    .replace(/\s+/g, " ")
+/* 裁左侧窄条：专门抓路线号 */
+function cropLeft(canvas, ratio=0.40){
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.floor(canvas.width * ratio));
+  c.height = canvas.height;
+  c.getContext('2d').drawImage(canvas, 0, 0, c.width, c.height, 0, 0, c.width, c.height);
+  return c;
+}
+
+/* OCR：整片（地址） */
+async function ocrCanvas(canvas, onProgress){
+  const { data } = await Tesseract.recognize(
+    canvas,
+    "eng",
+    {
+      logger: m=>{
+        if(m.status==="recognizing text" && onProgress){
+          onProgress(m.progress || 0);
+        }
+      }
+    }
+  );
+  return (data && data.text) ? data.text : "";
+}
+
+/* OCR：数字白名单（路线号） */
+async function ocrDigits(canvas, onProgress){
+  const { data } = await Tesseract.recognize(
+    canvas,
+    "eng",
+    {
+      logger: m=>{
+        if(m.status==="recognizing text" && onProgress){
+          onProgress(m.progress || 0);
+        }
+      },
+      tessedit_char_whitelist: "0123456789"
+    }
+  );
+  return (data && data.text) ? data.text : "";
+}
+
+/* 清洗 */
+function normalizeText(s){
+  return String(s||"")
+    .replace(/\r/g,"\n")
+    .replace(/[|•·]+/g," ")
+    .replace(/[，]/g,",")
+    .replace(/\s+\n/g,"\n")
+    .replace(/\n\s+/g,"\n")
+    .replace(/[ \t]{2,}/g," ")
     .trim();
 }
 
-function looksLikeStreetLine(line){
-  const s = line.toUpperCase();
-  // 典型地址关键词
-  const hasStreet =
-    /\b(ST|STREET|AVE|AVENUE|RD|ROAD|DR|DRIVE|BLVD|BOULEVARD|LN|LANE|CT|COURT|PL|PLACE|WAY|PIKE|CIR|CIRCLE|TER|TERRACE)\b/.test(s);
-  const hasCity = /(PITTSBURGH|ALLEGHENY|CRAFTON|MCKEES|ROCKS|PA)\b/.test(s);
-  const hasNumber = /\d{1,5}/.test(s);
-  return hasNumber && (hasStreet || hasCity);
+/* 地址提取：更泛化（不依赖固定城市名单） */
+function extractAddress(t){
+  const suffix = "(St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Blvd|Boulevard|Ln|Lane|Ct|Court|Pl|Place|Way|Pike|Cir|Circle|Ter|Terrace|Hwy|Highway)";
+  // 强锚点：, City, PA 或 PA 152xx
+  const re1 = new RegExp(
+    "(\\d{1,5}\\s+[A-Za-z0-9.'-]+(?:\\s+[A-Za-z0-9.'-]+){0,6}\\s+"+suffix+
+    "\\b[^\\n]{0,90}?(?:,\\s*[A-Za-z .'-]+,\\s*PA\\b|\\bPA\\b(?:\\s*\\d{5})?))",
+    "i"
+  );
+  const m1 = t.match(re1);
+  if(m1) return cleanAddr(m1[1]);
+
+  // 兜底：没 PA 也先抓一段像地址的
+  const re2 = new RegExp("(\\d{1,5}\\s+[A-Za-z0-9.'-]+(?:\\s+[A-Za-z0-9.'-]+){0,8}\\s+"+suffix+"\\b[^\\n]{0,80})","i");
+  const m2 = t.match(re2);
+  if(m2) return cleanAddr(m2[1]);
+
+  return null;
 }
 
-function mergeSplitRouteNo(str){
-  // 把 "8 0 5" / "80 5" 合并成 "805"
-  // 规则：若开头出现 1-4 位数字被空格分割，且后面跟地址数字/单词，优先合并前面的碎片
-  // 例："80 5 516 LORENZ AVE PITTSBURGH" -> route "805", addr "516 LORENZ..."
-  let s = str.replace(/\s+/g, " ").trim();
-
-  // 尝试：开头最多4段数字碎片，合起来 1-4 位
-  const m = s.match(/^(\d)\s+(\d)(?:\s+(\d))?(?:\s+(\d))?\s+/);
-  if(m){
-    const digits = [m[1],m[2],m[3],m[4]].filter(Boolean).join("");
-    if(digits.length>=2 && digits.length<=4){
-      s = digits + " " + s.slice(m[0].length);
-      return s;
-    }
-  }
-
-  // 尝试：前两段合并（80 5）
-  const m2 = s.match(/^(\d{1,3})\s+(\d)\s+/);
-  if(m2){
-    const digits = (m2[1]+m2[2]);
-    if(digits.length>=2 && digits.length<=4){
-      s = digits + " " + s.slice(m2[0].length);
-      return s;
-    }
-  }
-  return s;
-}
-
-function extractOneFromLine(line){
-  // 目标：返回 {noStr, addr} 或 null
-  let s = normalizeOcrText(line);
-  if(!s) return null;
-
-  s = mergeSplitRouteNo(s);
-
-  // 抽取全部数字（最多抓 1-5 位）
-  const nums = (s.match(/\b\d{1,5}\b/g) || []).map(n=>parseInt(n,10)).filter(n=>!Number.isNaN(n));
-  if(nums.length < 1) return null;
-
-  // 尝试找“线路号”和“门牌号”
-  // 你的经验：线路号 > 门牌号（很多时候线路号是 700~900，门牌号是 1~6000）
-  // 实操：如果能找到两个数字，取较大者当线路号，较小者当门牌号；
-  // 但要避免把 2026/01/18 这种日期当数字，所以过滤 1900~2100 的年份
-  const numsFiltered = nums.filter(n => !(n>=1900 && n<=2100)); // 去年份
-  const nums2 = numsFiltered.length ? numsFiltered : nums;
-
-  // 线路号候选：优先 1-4 位数字，且通常不超过 9999
-  // 从行里按出现顺序取前3个做判断
-  const seen = [];
-  for(const m of (s.match(/\b\d{1,5}\b/g) || [])){
-    const n = parseInt(m,10);
-    if(Number.isNaN(n)) continue;
-    if(n>=1900 && n<=2100) continue;
-    seen.push(n);
-    if(seen.length>=4) break;
-  }
-
-  let route = null;
-
-  // 优先：行首就是线路号（你的截图通常左侧大号）
-  const head = s.match(/^(\d{1,4})\b/);
-  if(head){
-    route = parseInt(head[1],10);
-  }
-
-  // 若行首不是靠谱，再用“最大值”策略（但要避免把门牌号 5000 当线路号）
-  // 经验：线路号通常 <= 9999 且常见 1~4 位；门牌号可能到 99999，但更多在 1~9999 也有
-  // 所以：如果存在两数且可满足 route > houseNo，则取能满足的那个
-  let house = null;
-  if(nums2.length >= 2){
-    const max = Math.max(...nums2);
-    const min = Math.min(...nums2);
-    // 只有当 max 看起来像线路号（<=9999）且 max > min 时才用
-    if(max <= 9999 && max > min){
-      route = route && route<=9999 ? route : max;
-      house = min;
-    }
-  }
-
-  // 如果 route 仍为空：找一个“看起来像线路号”的数字（1-4位且不是特别a年份）
-  if(route==null){
-    const cand = seen.find(n => n>=1 && n<=9999);
-    if(cand!=null) route = cand;
-  }
-
-  if(route==null) return null;
-
-  // 地址：从行里去掉前面的线路号，只保留从门牌号开始的一段
-  let addr = s;
-
-  // 删除明显噪音（shipment code / 备注）
-  addr = addr.replace(/\bUUS[0-9A-Z]+\b/gi,"").trim();
-
-  // 如果行首是线路号，把它剔除
-  addr = addr.replace(new RegExp("^"+route+"\\b\\s*"), "").trim();
-
-  // 如果能找到门牌号 house，就从 house 开始截取
-  if(house!=null){
-    const idx = addr.search(new RegExp("\\b"+house+"\\b"));
-    if(idx>0) addr = addr.slice(idx).trim();
-  }
-
-  // 再清一次
-  addr = addr
-    .replace(/\b(SUSPECTED|APT\/SUSPEC|LEAVE AT|HINT:|ADDRESS TYPE:).*/i, "") // 去备注尾巴（可根据需要加词）
-    .replace(/\s+,/g,",")
-    .replace(/\s+/g," ")
+function cleanAddr(a){
+  return String(a)
+    .replace(/\s*,\s*/g,", ")
+    .replace(/\s{2,}/g," ")
+    .replace(/\s*\.\.\.\s*$/,"")
     .trim();
-
-  // 最后校验：像地址才收
-  if(!looksLikeStreetLine(addr)) return null;
-
-  return { noStr: String(route), addr };
 }
 
-function dedupePairs(pairs){
-  const map = new Map();
-  for(const p of pairs){
-    const key = p.noStr + "||" + p.addr;
-    if(!map.has(key)) map.set(key, p);
+/* 路线号提取：优先用 digits OCR 的结果；再兜底扫描文本行 */
+function extractRouteNo(textDigits, textAll, addr){
+  const addrNum = (addr.match(/\b(\d{1,5})\b/)||[])[1] || "";
+  const dig = normalizeText(textDigits).replace(/\D/g," ").trim().split(/\s+/).filter(Boolean);
+
+  // 1) digits OCR 候选：取最像路线号的 1-4位，排除门牌号
+  const digCandidates = dig
+    .map(x=>x.trim())
+    .filter(x=>/^\d{1,4}$/.test(x))
+    .filter(x=>!(addrNum && x===addrNum));
+
+  if(digCandidates.length){
+    // 偏好 1-3位，其次4位；数值小一点更常见
+    digCandidates.sort((a,b)=>{
+      if(a.length!==b.length) return a.length-b.length;
+      return parseInt(a,10)-parseInt(b,10);
+    });
+    return digCandidates[0];
   }
-  return [...map.values()];
+
+  // 2) 兜底：从整片文本里找
+  const t = normalizeText(textAll);
+  const near = t.match(/(?:route\s*no|route|rte|no\.?)\s*[:#]?\s*(\d{1,4})/i);
+  if(near && (!addrNum || near[1]!==addrNum)) return near[1];
+
+  const lines = t.split("\n").map(s=>s.trim()).filter(Boolean);
+  const candidates = [];
+  for(const line of lines){
+    if(/\b20\d{2}\b/.test(line)) continue;
+    if(/\b\d+\.\d+\b/.test(line)) continue;
+    if(/\b\d{5}\b/.test(line) && line.length<=8) continue;
+
+    const m = line.match(/^(\d{1,4})$/);
+    if(m){
+      const n = m[1];
+      if(addrNum && n===addrNum) continue;
+      let score = 100;
+      if(n.length===4) score -= 15; // 4位更像门牌/误识别，降权
+      candidates.push({n, score});
+      continue;
+    }
+    const m2 = line.match(/^(\d{1,4})\b/);
+    if(m2){
+      const n = m2[1];
+      if(addrNum && n===addrNum) continue;
+      let score = 60;
+      if(/\b(St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Blvd|Lane|Ln|Ct|Pl|Way|Pike)\b/i.test(line)) score -= 25;
+      if(n.length===4) score -= 15;
+      candidates.push({n, score});
+    }
+  }
+  if(!candidates.length) return null;
+  candidates.sort((a,b)=>{
+    if(b.score!==a.score) return b.score-a.score;
+    if(a.n.length!==b.n.length) return a.n.length-b.n.length;
+    return parseInt(a.n,10)-parseInt(b.n,10);
+  });
+  return candidates[0].n;
+}
+
+/* 从 OCR 文本里提取 pair */
+function extractPair(textDigits, textAll){
+  const all = normalizeText(textAll);
+  const addr = extractAddress(all);
+  if(!addr) return null;
+
+  const no = extractRouteNo(textDigits, all, addr);
+  if(!no) return null;
+
+  return {noStr:no, addr};
 }
 
 async function runOCR(files){
-  // iPhone 上避免你狂点：先禁用按钮
-  setUiBusy(true);
+  showProgress(true);
+  setProgress(I18N[lang].ocrReady, 1);
 
-  try{
-    showProgress(`<div class="mono"><b>OCR 开始…</b>（共 ${files.length} 张，最多9张）</div>
-      <div class="mono warn">提示：首次加载OCR组件可能会慢一点点，后面会快很多。</div>`);
+  const results = [];
+  let done = 0;
+  const totalSlices = files.length * 4;
 
-    // 初始化 worker（英文即可：数字+英文地址更稳）
-    const worker = await Tesseract.createWorker("eng", 1, {
-      logger: m => {
-        if(m && m.status){
-          showProgress(`<div class="mono"><b>OCR 进行中…</b></div>
-          <div class="mono">状态：${escapeHtml(m.status)} ${m.progress!=null ? Math.round(m.progress*100)+"%" : ""}</div>
-          <div class="mono">图片：处理中…</div>`);
-        }
-      }
-    });
+  for(let i=0;i<files.length;i++){
+    setProgress(I18N[lang].ocrSlicing(i+1, files.length), Math.floor(done/totalSlices*100));
+    const slices = await sliceImageOverlap(files[i], 4, 0.12);
 
-    const allPairs = [];
-    for(let i=0;i<files.length;i++){
-      const f = files[i];
-      showProgress(`<div class="mono"><b>OCR 识别中…</b> ${i+1}/${files.length}</div>
-        <div class="mono">文件：${escapeHtml(f.name)}</div>`);
+    for(let s=0;s<slices.length;s++){
+      const label = I18N[lang].ocrRunning(i+1, files.length, s+1);
+      let lastP = 0;
 
-      const imgDataUrl = await fileToDataURL(f);
+      // 先裁左侧数字条
+      const left = cropLeft(slices[s], 0.40);
 
-      // 做一点点预处理：提高对比度（特别是你那种白底黑字）
-      const pre = await preprocessToDataURL(imgDataUrl);
+      // 两段 OCR（并行会占 CPU，这里顺序更稳）
+      const digitsText = await ocrDigits(left, (p)=>{
+        const pct = Math.floor(((done + p*0.45) / totalSlices) * 100);
+        if(p > lastP + 0.06){ setProgress(label, pct); lastP = p; }
+      });
 
-      const { data } = await worker.recognize(pre);
+      const fullText = await ocrCanvas(slices[s], (p)=>{
+        const pct = Math.floor(((done + 0.45 + p*0.55) / totalSlices) * 100);
+        if(p > lastP + 0.06){ setProgress(label, pct); lastP = p; }
+      });
 
-      const raw = (data && data.text) ? data.text : "";
-      const lines = raw.split(/\n+/).map(x=>x.trim()).filter(Boolean);
+      done++;
 
-      // 只抓“像地址的一行”，并用你的“线路号 > 门牌号”规则修复
-      const pairs = [];
-      for(const line of lines){
-        const p = extractOneFromLine(line);
-        if(p) pairs.push(p);
-      }
-
-      // 如果这一张识别到很少，补救：把整个文本按句子拆
-      if(pairs.length < 2){
-        const rough = normalizeOcrText(raw);
-        const chunks = rough.split(/(?<=\bPA\b|\bPITTSBURGH\b|\bALLEGHENY\b)\s+/i);
-        for(const c of chunks){
-          const p = extractOneFromLine(c);
-          if(p) pairs.push(p);
-        }
-      }
-
-      allPairs.push(...pairs);
+      const pair = extractPair(digitsText, fullText);
+      if(pair) results.push(pair);
     }
-
-    await worker.terminate();
-
-    const finalPairs = dedupePairs(allPairs);
-
-    // 写回 textarea（按线路号升序）
-    const sorted = finalPairs
-      .map(p=>({noStr:p.noStr, noNum:parseInt(p.noStr,10)||999999, addr:p.addr}))
-      .sort((a,b)=>a.noNum-b.noNum);
-
-    elInput.value = sorted.map(x=>`${x.noStr} ${x.addr}`).join("\n");
-    localStorage.setItem(K_INPUT, elInput.value);
-
-    // 生成列表
-    buildList();
-
-    showProgress(`<div class="mono ok">OCR 完成 ✅</div>
-      <div class="mono">提取到 <b>${finalPairs.length}</b> 条（已自动去重）</div>
-      <div class="mono warn">若有个别错误：点每条右侧 ✏️ 手动改一下最稳。</div>`);
-
-    // 自动收起提示
-    setTimeout(()=>hideProgress(), 2500);
-
-  }catch(e){
-    showProgress(`<div class="mono err">OCR 失败：${escapeHtml(e && e.message ? e.message : String(e))}</div>
-      <div class="mono">你可以先用“粘贴文本”方式，或换更清晰截图再试。</div>`);
-  }finally{
-    setUiBusy(false);
   }
-}
 
-function setUiBusy(busy){
-  const dis = !!busy;
-  btnBuild.disabled = dis;
-  btnClear.disabled = dis;
-  btnCopyAll.disabled = dis;
-  btnCopyAddr.disabled = dis;
-  btnPaste.disabled = dis;
-  imgInput.disabled = dis;
-}
+  showProgress(false);
 
-function fileToDataURL(file){
-  return new Promise((res, rej)=>{
-    const r = new FileReader();
-    r.onload = ()=>res(r.result);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-}
-
-async function preprocessToDataURL(dataUrl){
-  // 轻量预处理：灰度 + 增强对比，减少乱码
-  const img = await loadImage(dataUrl);
-  const maxW = 1400; // 控制大小，避免太慢
-  const scale = Math.min(1, maxW / img.width);
-  const w = Math.round(img.width * scale);
-  const h = Math.round(img.height * scale);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext('2d', { willReadFrequently:true });
-  ctx.drawImage(img, 0, 0, w, h);
-
-  const im = ctx.getImageData(0,0,w,h);
-  const d = im.data;
-
-  // 灰度 + 对比拉伸
-  // 对比：y = (y-128)*c + 128
-  const c = 1.35;
-  for(let i=0;i<d.length;i+=4){
-    const r=d[i], g=d[i+1], b=d[i+2];
-    let y = (0.299*r + 0.587*g + 0.114*b);
-    y = (y-128)*c + 128;
-    y = Math.max(0, Math.min(255, y));
-    // 轻微阈值：让字更黑
-    const t = y < 180 ? y*0.85 : y*1.05;
-    const v = Math.max(0, Math.min(255, t));
-    d[i]=d[i+1]=d[i+2]=v;
+  // 去重（同号同地址）
+  const uniq = [];
+  const seen = new Set();
+  for(const r of results){
+    const key = r.noStr + "||" + r.addr;
+    if(seen.has(key)) continue;
+    seen.add(key);
+    uniq.push(r);
   }
-  ctx.putImageData(im,0,0);
-  return canvas.toDataURL("image/png", 0.92);
+
+  if(!uniq.length){
+    alert(I18N[lang].ocrNone);
+    return;
+  }
+
+  // ✅ OCR 结果：追加到现有输入 + 自动去重
+  const appendText = uniq.map(x=>`${x.noStr} ${x.addr}`).join("\n");
+  const merged = (elInput.value ? (elInput.value.trimEnd()+"\n") : "") + appendText;
+
+  // 用 parseLines 再去重一次（按 no+addr）
+  const parsed = parseLines(merged);
+  const seen2 = new Set();
+  const finalLines = [];
+  for(const p of parsed){
+    const k = p.noStr + "||" + p.addr;
+    if(seen2.has(k)) continue;
+    seen2.add(k);
+    finalLines.push(`${p.noStr} ${p.addr}`);
+  }
+
+  elInput.value = finalLines.join("\n");
+  localStorage.setItem(K_INPUT, elInput.value);
+
+  // 默认升序
+  setSort("asc");
+  buildList();
+
+  alert(I18N[lang].ocrDone(uniq.length));
 }
 
-function loadImage(src){
-  return new Promise((res, rej)=>{
-    const img = new Image();
-    img.onload = ()=>res(img);
-    img.onerror = rej;
-    img.src = src;
-  });
+/* ===================== 安全输出 ===================== */
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
 }
 
 /* ===================== 初始化 ===================== */
 (function init(){
+  // 排序按钮状态
+  document.getElementById('sortRaw').classList.toggle('on', sortMode==="raw");
   document.getElementById('sortAsc').classList.toggle('on', sortMode==="asc");
   document.getElementById('sortDesc').classList.toggle('on', sortMode==="desc");
+
+  applyLang();
   buildList();
 })();
 </script>
