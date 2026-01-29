@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Route Assistant (List + OCR)</title>
 
-<!-- OCR：Tesseract.js（纯前端，不用服务器） -->
+<!-- OCR: Tesseract.js (front-end only) -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
 <style>
@@ -16,7 +16,7 @@
   }
   body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",Arial}
   .wrap{max-width:820px;margin:0 auto;padding:12px}
-  .topline{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .topline{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
   h2{margin:8px 0 10px;font-size:26px}
   textarea{
     width:100%;height:150px;box-sizing:border-box;border-radius:14px;border:1px solid var(--line);
@@ -29,28 +29,30 @@
   .danger{background:#fff;border:1px solid #ffb3b3;color:var(--red)}
   .small{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.35}
   .pill{background:#fff;border:1px solid var(--line);border-radius:999px;padding:8px 10px;font-weight:900}
-  .lang{display:flex;gap:8px;align-items:center}
+  .lang{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
   .lang button{padding:8px 12px;font-size:14px;border-radius:999px}
   .lang .on{background:var(--blue);color:#fff;border:1px solid var(--blue)}
   .lang .off{background:#fff;color:#111;border:1px solid var(--line)}
 
-  /* 置顶统计栏（一直看得到） */
+  /* Sticky stats */
   .sticky{position:sticky; top:0; z-index:999;background:var(--bg); padding-top:8px;}
   .stat{
     background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;
     font-size:16px;font-weight:900;display:flex;gap:12px;flex-wrap:wrap;align-items:center
   }
+
+  /* Sorting */
   .sortbar{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
   .sortbtn{background:#fff;border:1px solid var(--line);color:#111}
   .sortbtn.on{background:var(--blue);border-color:var(--blue);color:#fff}
 
-  /* 搜索 */
+  /* Search */
   .search{
     width:100%;box-sizing:border-box;margin:8px 0 0;
     border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-size:14px;background:#fff
   }
 
-  /* 列表卡片 */
+  /* List cards */
   .list{margin-top:10px}
   .card{
     background:var(--card);border:1px solid var(--line);border-radius:18px;
@@ -70,7 +72,7 @@
   .editbtn{background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;font-weight:1000}
   .delivered{opacity:.45}
 
-  /* OCR 进度条 */
+  /* OCR Progress */
   .progress{
     background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;margin-top:8px;
     font-size:13px;color:#111;font-weight:800;
@@ -84,10 +86,16 @@
 <div class="wrap">
   <div class="topline">
     <h2 id="title">路线助手（纯列表最终版 + OCR）</h2>
+
+    <!-- Language + Maps toggles -->
     <div class="lang">
       <span class="pill" id="langLabel">语言</span>
       <button id="btnZh" class="on">中文</button>
       <button id="btnEn" class="off">EN</button>
+
+      <span class="pill" id="mapLabel">地图</span>
+      <button id="btnMapApple" class="on">Apple</button>
+      <button id="btnMapGoogle" class="off">Google</button>
     </div>
   </div>
 
@@ -119,22 +127,26 @@
   </div>
 
   <div class="list" id="list"></div>
-
   <div class="small" id="tips"></div>
 
-  <!-- 多选图片 -->
+  <!-- Multi-image input -->
   <input id="file" type="file" accept="image/*" multiple style="display:none" />
 </div>
 
 <script>
-/* ===================== i18n：中英切换 ===================== */
+/* ===================== i18n: Chinese/English toggle ===================== */
 const K_LANG = "rn2:lang";
 let lang = localStorage.getItem(K_LANG) || "zh";
+
+/* ===================== Maps: Apple/Google toggle ===================== */
+const K_MAP = "rn2:map";
+let mapMode = localStorage.getItem(K_MAP) || "apple"; // apple / google
 
 const I18N = {
   zh: {
     title: "路线助手（纯列表最终版 + OCR）",
     langLabel: "语言",
+    mapLabel: "地图",
     inputPH: `方式1：粘贴（每行：线路号 空格 地址）
 例：
 55 1112 Berkshire Ave, Pittsburgh, PA
@@ -169,7 +181,7 @@ const I18N = {
     promptAddr: "修改地址（建议包含城市/PA）",
     errNo: "线路号必须是 1-4 位数字",
     max9: n=>`最多选择 9 张图。你现在选了 ${n} 张。`,
-    tips: `✅ 点“导航”会自动勾选已送达，并跳转 Google Maps。<br/>
+    tips: `✅ 点“导航”会自动勾选已送达，并按你选择的地图打开路线。<br/>
 ✅ 线路号每天不一样没关系：系统按“今天”独立保存（明天自动新的一天）。<br/>
 ✅ OCR 可能偶尔把号/地址识别错：点 ✏️ 只改这一条就行（会同步保存）。<br/>
 ✅ OCR 强化：切片重叠 + 左侧数字白名单 + 地址规则更泛化。`
@@ -177,6 +189,7 @@ const I18N = {
   en: {
     title: "Route Assistant (List + OCR)",
     langLabel: "Language",
+    mapLabel: "Maps",
     inputPH: `Option 1: Paste (one per line: RouteNo + space + Address)
 Example:
 55 1112 Berkshire Ave, Pittsburgh, PA
@@ -211,11 +224,22 @@ Auto-extracts Route No + Address`,
     promptAddr: "Edit Address (include city/PA if possible)",
     errNo: "Route No must be 1–4 digits",
     max9: n=>`Max 9 images. You selected ${n}.`,
-    tips: `✅ “Navigate” auto-marks delivered and opens Google Maps.<br/>
+    tips: `✅ “Navigate” auto-marks delivered and opens the selected map app.<br/>
 ✅ Saved per day (tomorrow starts fresh).<br/>
 ✅ OCR can be wrong sometimes: tap ✏️ to edit just that item.<br/>
 ✅ OCR boost: overlapped slices + digit whitelist for route no + broader address rules.`
   }
+};
+
+function applyMapUI(){
+  document.getElementById('btnMapApple').className  = (mapMode==="apple")  ? "on" : "off";
+  document.getElementById('btnMapGoogle').className = (mapMode==="google") ? "on" : "off";
+}
+document.getElementById('btnMapApple').onclick = ()=>{
+  mapMode="apple"; localStorage.setItem(K_MAP,mapMode); applyMapUI();
+};
+document.getElementById('btnMapGoogle').onclick = ()=>{
+  mapMode="google"; localStorage.setItem(K_MAP,mapMode); applyMapUI();
 };
 
 function applyLang(){
@@ -223,6 +247,7 @@ function applyLang(){
   document.documentElement.lang = (lang==="zh") ? "zh" : "en";
   document.getElementById('title').textContent = t.title;
   document.getElementById('langLabel').textContent = t.langLabel;
+  document.getElementById('mapLabel').textContent = t.mapLabel;
 
   elInput.placeholder = t.inputPH;
 
@@ -243,13 +268,14 @@ function applyLang(){
   document.getElementById('btnZh').className = (lang==="zh") ? "on" : "off";
   document.getElementById('btnEn').className = (lang==="en") ? "on" : "off";
 
+  applyMapUI();
   renderAll();
 }
 
 document.getElementById('btnZh').onclick = ()=>{ lang="zh"; localStorage.setItem(K_LANG,lang); applyLang(); };
 document.getElementById('btnEn').onclick = ()=>{ lang="en"; localStorage.setItem(K_LANG,lang); applyLang(); };
 
-/* ===================== 存储：按天独立 ===================== */
+/* ===================== Storage: per day ===================== */
 function todayKey(){
   const d=new Date();
   const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
@@ -264,7 +290,7 @@ let doneSet = new Set(JSON.parse(localStorage.getItem(K_DONE) || "[]"));
 let sortMode = localStorage.getItem(K_SORT) || "asc";
 let fixedMap = JSON.parse(localStorage.getItem(K_FIX) || "{}");
 
-/* ===================== 数据 ===================== */
+/* ===================== Data ===================== */
 let orders = []; // {id,noStr,noNum,addr,done}
 
 /* ===================== DOM ===================== */
@@ -294,6 +320,7 @@ elFile.addEventListener('change', async ()=>{
   const files = Array.from(elFile.files || []);
   elFile.value = "";
   if(!files.length) return;
+
   if(files.length > 9){
     alert(I18N[lang].max9(files.length));
     return;
@@ -301,11 +328,11 @@ elFile.addEventListener('change', async ()=>{
   await runOCR(files);
 });
 
-/* ===================== 恢复输入 ===================== */
+/* ===================== Restore input ===================== */
 elInput.value = localStorage.getItem(K_INPUT) || "";
 elInput.addEventListener('input', ()=> localStorage.setItem(K_INPUT, elInput.value));
 
-/* ===================== 粘贴板 ===================== */
+/* ===================== Clipboard ===================== */
 async function pasteFromClipboard(){
   try{
     const txt = await navigator.clipboard.readText();
@@ -318,7 +345,7 @@ async function pasteFromClipboard(){
   }
 }
 
-/* ===================== 解析：粘贴文本（每行：号 地址） ===================== */
+/* ===================== Parse: each line "no addr" ===================== */
 function parseLines(text){
   const lines = (text||"").split(/\n+/).map(s=>s.trim()).filter(Boolean);
   const out = [];
@@ -331,7 +358,7 @@ function parseLines(text){
   return out;
 }
 
-/* ===================== 排序 ===================== */
+/* ===================== Sorting ===================== */
 function setSort(mode){
   sortMode = mode;
   localStorage.setItem(K_SORT, sortMode);
@@ -347,12 +374,12 @@ function sortOrders(arr){
   return a;
 }
 
-/* ===================== 构建列表 ===================== */
+/* ===================== Build list ===================== */
 function buildList(){
   const parsed = parseLines(elInput.value || "");
 
   orders = parsed.map(p=>{
-    const id = p.noStr + "||" + p.addr;
+    const id = p.noStr + "||" + p.addr; // base key
     const fix = fixedMap[id];
     const noStr = fix?.noStr || p.noStr;
     const addr  = fix?.addr  || p.addr;
@@ -367,7 +394,7 @@ function buildList(){
     };
   });
 
-  // 二次去重（防止手改后出现重复）
+  // de-dup by current no+addr (prevents duplicates after edits)
   const seen = new Set();
   orders = orders.filter(o=>{
     const k = o.noStr + "||" + o.addr;
@@ -380,14 +407,14 @@ function buildList(){
   renderAll();
 }
 
-/* ===================== 统计 ===================== */
+/* ===================== Stats ===================== */
 function renderStat(){
   const total = orders.length;
   const sent = orders.filter(o=>o.done).length;
   elStat.textContent = I18N[lang].stat(total, sent, total - sent);
 }
 
-/* ===================== 列表渲染 ===================== */
+/* ===================== Render list ===================== */
 function renderList(){
   elList.innerHTML = "";
   const q = (elSearch.value || "").trim().toLowerCase();
@@ -415,6 +442,7 @@ function renderList(){
       </div>
     `;
 
+    // manual check
     card.querySelector('.chk').addEventListener('change', (e)=>{
       o.done = e.target.checked;
       if(o.done) doneSet.add(o.id);
@@ -423,8 +451,10 @@ function renderList(){
       renderAll();
     });
 
+    // navigation
     card.querySelector('.navbtn').addEventListener('click', ()=> startNav(o));
 
+    // edit
     card.querySelector('.editbtn').addEventListener('click', ()=>{
       const newNo = prompt(I18N[lang].promptNo, o.noStr);
       if(newNo===null) return;
@@ -436,9 +466,11 @@ function renderList(){
       const newAddr = prompt(I18N[lang].promptAddr, o.addr);
       if(newAddr===null) return;
 
+      // store edits (keyed by original id)
       fixedMap[o.id] = {noStr:noClean, addr:String(newAddr).trim()};
       localStorage.setItem(K_FIX, JSON.stringify(fixedMap));
 
+      // apply in-memory
       o.noStr = noClean;
       o.noNum = parseInt(noClean,10);
       o.addr  = String(newAddr).trim();
@@ -455,12 +487,12 @@ function renderAll(){
   renderList();
 }
 
-/* ===================== 已送存储 ===================== */
+/* ===================== Done storage ===================== */
 function saveDone(){
   localStorage.setItem(K_DONE, JSON.stringify([...doneSet]));
 }
 
-/* ===================== 导航：Google Maps（自动✅） ===================== */
+/* ===================== Navigation: Apple Maps / Google Maps (auto mark done) ===================== */
 function startNav(o){
   if(!o.done){
     o.done = true;
@@ -468,11 +500,18 @@ function startNav(o){
     saveDone();
     renderAll();
   }
-  const url = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(o.addr) + "&travelmode=driving";
+
+  let url = "";
+  if(mapMode === "apple"){
+    // iOS-friendly: opens Apple Maps app when possible
+    url = "https://maps.apple.com/?daddr=" + encodeURIComponent(o.addr) + "&dirflg=d";
+  }else{
+    url = "https://www.google.com/maps/dir/?api=1&destination=" + encodeURIComponent(o.addr) + "&travelmode=driving";
+  }
   window.location.href = url;
 }
 
-/* ===================== 复制 ===================== */
+/* ===================== Copy ===================== */
 function makeCopyText(withNo){
   const view = sortOrders(orders);
   if(withNo) return view.map(o=>`${o.noStr} ${o.addr}`).join("\n");
@@ -493,7 +532,7 @@ async function copyText(txt){
   }
 }
 
-/* ===================== 清空今天 ===================== */
+/* ===================== Clear today ===================== */
 function clearToday(){
   if(!confirm(I18N[lang].confirmClear)) return;
   localStorage.removeItem(K_INPUT);
@@ -506,7 +545,7 @@ function clearToday(){
   renderAll();
 }
 
-/* ===================== OCR 强化：重叠切片 + 左侧数字白名单 + 追加去重 ===================== */
+/* ===================== OCR 강화: overlapped slices + digit whitelist + append & dedupe ===================== */
 function showProgress(on){
   elProg.style.display = on ? "block" : "none";
   if(!on){ elProgText.textContent=""; elProgBar.style.width="0%"; }
@@ -526,7 +565,6 @@ function fileToImage(file){
   });
 }
 
-/* 重叠切片：避免把“号”和“地址”切开 */
 async function sliceImageOverlap(file, parts=4, overlapRatio=0.12){
   const img = await fileToImage(file);
   const w = img.naturalWidth, h = img.naturalHeight;
@@ -550,7 +588,6 @@ async function sliceImageOverlap(file, parts=4, overlapRatio=0.12){
   return canvases;
 }
 
-/* 裁左侧窄条：专门抓路线号 */
 function cropLeft(canvas, ratio=0.40){
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.floor(canvas.width * ratio));
@@ -559,7 +596,6 @@ function cropLeft(canvas, ratio=0.40){
   return c;
 }
 
-/* OCR：整片（地址） */
 async function ocrCanvas(canvas, onProgress){
   const { data } = await Tesseract.recognize(
     canvas,
@@ -575,7 +611,6 @@ async function ocrCanvas(canvas, onProgress){
   return (data && data.text) ? data.text : "";
 }
 
-/* OCR：数字白名单（路线号） */
 async function ocrDigits(canvas, onProgress){
   const { data } = await Tesseract.recognize(
     canvas,
@@ -592,7 +627,6 @@ async function ocrDigits(canvas, onProgress){
   return (data && data.text) ? data.text : "";
 }
 
-/* 清洗 */
 function normalizeText(s){
   return String(s||"")
     .replace(/\r/g,"\n")
@@ -604,10 +638,8 @@ function normalizeText(s){
     .trim();
 }
 
-/* 地址提取：更泛化（不依赖固定城市名单） */
 function extractAddress(t){
   const suffix = "(St|Street|Ave|Avenue|Rd|Road|Dr|Drive|Blvd|Boulevard|Ln|Lane|Ct|Court|Pl|Place|Way|Pike|Cir|Circle|Ter|Terrace|Hwy|Highway)";
-  // 强锚点：, City, PA 或 PA 152xx
   const re1 = new RegExp(
     "(\\d{1,5}\\s+[A-Za-z0-9.'-]+(?:\\s+[A-Za-z0-9.'-]+){0,6}\\s+"+suffix+
     "\\b[^\\n]{0,90}?(?:,\\s*[A-Za-z .'-]+,\\s*PA\\b|\\bPA\\b(?:\\s*\\d{5})?))",
@@ -616,7 +648,6 @@ function extractAddress(t){
   const m1 = t.match(re1);
   if(m1) return cleanAddr(m1[1]);
 
-  // 兜底：没 PA 也先抓一段像地址的
   const re2 = new RegExp("(\\d{1,5}\\s+[A-Za-z0-9.'-]+(?:\\s+[A-Za-z0-9.'-]+){0,8}\\s+"+suffix+"\\b[^\\n]{0,80})","i");
   const m2 = t.match(re2);
   if(m2) return cleanAddr(m2[1]);
@@ -632,19 +663,16 @@ function cleanAddr(a){
     .trim();
 }
 
-/* 路线号提取：优先用 digits OCR 的结果；再兜底扫描文本行 */
 function extractRouteNo(textDigits, textAll, addr){
   const addrNum = (addr.match(/\b(\d{1,5})\b/)||[])[1] || "";
   const dig = normalizeText(textDigits).replace(/\D/g," ").trim().split(/\s+/).filter(Boolean);
 
-  // 1) digits OCR 候选：取最像路线号的 1-4位，排除门牌号
   const digCandidates = dig
     .map(x=>x.trim())
     .filter(x=>/^\d{1,4}$/.test(x))
     .filter(x=>!(addrNum && x===addrNum));
 
   if(digCandidates.length){
-    // 偏好 1-3位，其次4位；数值小一点更常见
     digCandidates.sort((a,b)=>{
       if(a.length!==b.length) return a.length-b.length;
       return parseInt(a,10)-parseInt(b,10);
@@ -652,7 +680,6 @@ function extractRouteNo(textDigits, textAll, addr){
     return digCandidates[0];
   }
 
-  // 2) 兜底：从整片文本里找
   const t = normalizeText(textAll);
   const near = t.match(/(?:route\s*no|route|rte|no\.?)\s*[:#]?\s*(\d{1,4})/i);
   if(near && (!addrNum || near[1]!==addrNum)) return near[1];
@@ -669,7 +696,7 @@ function extractRouteNo(textDigits, textAll, addr){
       const n = m[1];
       if(addrNum && n===addrNum) continue;
       let score = 100;
-      if(n.length===4) score -= 15; // 4位更像门牌/误识别，降权
+      if(n.length===4) score -= 15;
       candidates.push({n, score});
       continue;
     }
@@ -692,7 +719,6 @@ function extractRouteNo(textDigits, textAll, addr){
   return candidates[0].n;
 }
 
-/* 从 OCR 文本里提取 pair */
 function extractPair(textDigits, textAll){
   const all = normalizeText(textAll);
   const addr = extractAddress(all);
@@ -720,10 +746,8 @@ async function runOCR(files){
       const label = I18N[lang].ocrRunning(i+1, files.length, s+1);
       let lastP = 0;
 
-      // 先裁左侧数字条
       const left = cropLeft(slices[s], 0.40);
 
-      // 两段 OCR（并行会占 CPU，这里顺序更稳）
       const digitsText = await ocrDigits(left, (p)=>{
         const pct = Math.floor(((done + p*0.45) / totalSlices) * 100);
         if(p > lastP + 0.06){ setProgress(label, pct); lastP = p; }
@@ -743,7 +767,7 @@ async function runOCR(files){
 
   showProgress(false);
 
-  // 去重（同号同地址）
+  // De-dup OCR results by no+addr
   const uniq = [];
   const seen = new Set();
   for(const r of results){
@@ -758,11 +782,10 @@ async function runOCR(files){
     return;
   }
 
-  // ✅ OCR 结果：追加到现有输入 + 自动去重
+  // Append OCR lines to existing input, then re-parse & de-dup
   const appendText = uniq.map(x=>`${x.noStr} ${x.addr}`).join("\n");
   const merged = (elInput.value ? (elInput.value.trimEnd()+"\n") : "") + appendText;
 
-  // 用 parseLines 再去重一次（按 no+addr）
   const parsed = parseLines(merged);
   const seen2 = new Set();
   const finalLines = [];
@@ -776,27 +799,27 @@ async function runOCR(files){
   elInput.value = finalLines.join("\n");
   localStorage.setItem(K_INPUT, elInput.value);
 
-  // 默认升序
+  // Default sort asc
   setSort("asc");
   buildList();
 
   alert(I18N[lang].ocrDone(uniq.length));
 }
 
-/* ===================== 安全输出 ===================== */
+/* ===================== Safe output ===================== */
 function escapeHtml(s){
   return String(s).replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[m]));
 }
 
-/* ===================== 初始化 ===================== */
+/* ===================== Init ===================== */
 (function init(){
-  // 排序按钮状态
   document.getElementById('sortRaw').classList.toggle('on', sortMode==="raw");
   document.getElementById('sortAsc').classList.toggle('on', sortMode==="asc");
   document.getElementById('sortDesc').classList.toggle('on', sortMode==="desc");
 
-  applyLang();
-  buildList();
+  applyLang();     // sets UI text + stats
+  applyMapUI();    // sets map buttons
+  buildList();     // renders list
 })();
 </script>
 </body>
